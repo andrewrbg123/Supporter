@@ -1,0 +1,17 @@
+{
+  "Group": "ThePeoplesServer",
+  "Name": "SupporterMod",
+  "Version": "0.1.0",
+  "Description": "v0.1.0 - Supporter rank for The People's Server. Entitlement core only: grant, renewal, grace period and nightly expiry reconcile, backed by SQLite. Renewals extend from the existing expiry rather than from now, so buying early never costs time. Grants carrying a payment-provider transaction id are applied at most once, because Tebex retries delivery until the server acknowledges it. No perks are wired up yet and nothing in this plugin touches combat, claims, power, outpost income, KOTJ scoring or the bucks economy.",
+  "Authors": [
+    {
+      "Name": "ThePeoplesServer"
+    }
+  ],
+  "ServerVersion": ">=0.5.0 <0.6.0",
+  "Dependencies": {},
+  "OptionalDependencies": {},
+  "DisabledByDefault": false,
+  "IncludesAssetPack": false,
+  "Main": "com.peoplesserver.supportermod.SupporterPlugin"
+}

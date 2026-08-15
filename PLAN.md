@@ -7,31 +7,32 @@ built, what is blocked, and the decisions still outstanding.
 
 | Phase | State | Notes |
 |---|---|---|
-| 0 — Recon | **Blocked** | Needs the server jar and FactionMod. See *Inputs needed*. |
-| 1 — Entitlement | **Core done, adapter blocked** | Service, storage, config, reconcile built and tested. Plugin class, commands and events need Phase 0. |
-| 2 — Identity | Not started | Blocked on R6 (chat ownership). |
-| 3 — Homes | Not started | Blocked on R5. |
-| 4 — Trails | Not started | Blocked on R2 and the particle asset format. |
-| 5 — Tokens / shop | Not started | Blocked on Phase 4 and `ShopUI`. |
-| 6 — Community | Not started | Blocked on R1, R3, R4. |
+| 0 — Recon | **Mostly answered** | See PHASE0-RECON.md. A1, A2, C8, C9 need the server jar. |
+| 1 — Entitlement | **Core done, adapter blocked** | Service, storage, config, reconcile built and tested. Plugin class, commands and events need the server jar to compile. |
+| 2 — Identity | Unblocked on design, blocked on build | R6 resolved favourably; needs the server jar and HyUI. |
+| 3 — Homes | Blocked | R5 needs the `mods/` listing. Teleport pattern confirmed. |
+| 4 — Trails | **Unblocked on design** | R2 confirmed viewer lists; asset format fully recovered. |
+| 5 — Tokens / shop | Blocked | Needs HyUI and Phase 4. |
+| 6 — Community | Blocked | R1, R3, R4 all need the server jar. |
 
 ## Inputs needed
 
-Ordered by what they unblock.
+FactionMod 1.19.13 has been supplied and analysed — see PHASE0-RECON.md. Still outstanding,
+ordered by what they unblock.
 
-1. **`SUPPORTERMOD_SPEC.md`** — every phase implements a section of it. Without §2.1 the table
-   set is guesswork, without §4 the config keys are.
-2. **The Hytale server jar** — the `javap` target for Phase 0 A/B/C.
-3. **`FactionMod-1_18_3.jar`**, or better its source — the reference for 10 of the 14 Phase 0
-   questions.
-4. **FactionMod's `build.gradle(.kts)` and `manifest.json`** — how a plugin compiles against
-   the server, and the descriptor format to mirror.
-5. **The server's plugin directory**, plus any homes/essentials plugin and LuckPerms-equivalent
-   jars — D10 and D11 need `javap`, not a yes/no.
-6. **The `FM_Boundary_Preset_Ember` asset triple** — Phase 4 copies its format exactly. These
-   live under a server asset path and may not be inside the jar.
-7. **The Tebex package's command string**, and whether it is configured to run offline.
-8. **A staging server**, and how a plugin is deployed and reloaded on it.
+1. **The Hytale server jar** — R1 (tab list), R3 (connection hook), R4 (display name), C9 (player
+   cap), and the `PlayerChatEvent` cancellation semantics that Phase 2 depends on. Also needed on
+   the compile classpath before any Hytale-facing code can be built.
+2. **The HyUI jar (`au.ellie.hyui`)** — a third-party library FactionMod's UI is built on, not
+   bundled in its jar and not part of the server. Blocks every panel in Phases 2, 5 and 6.
+3. **`SUPPORTERMOD_SPEC.md`** — without §2.1 the table set is guesswork, without §4 the config
+   keys are.
+4. **The `mods/` and `plugins/` directory listing**, plus any homes/essentials and
+   LuckPerms-equivalent jars — D10 and D11.
+5. **The Tebex package's command string**, and whether it is configured to run offline.
+6. **A staging server** — above all to test whether `sqlite-jdbc` can unpack its native library
+   in the server environment. See the E13 note in the recon report; there is no SQLite precedent
+   on this server, and that failure mode only appears at runtime.
 
 ## Corrections to the prompt
 
@@ -47,20 +48,34 @@ Ordered by what they unblock.
 - **Tebex retries command delivery.** The prompt passes a `txn` to `grant()` but never says it
   must be unique, so the obvious implementation delivers one purchase several times. Handled
   here with a `supporter_txn` ledger keyed on the transaction id; see the tests.
+- **The prescribed command pattern breaks the Tebex integration.** Phase 1 says to follow
+  `AbstractCommandCollection` + `AbstractPlayerCommand`. But `AbstractPlayerCommand.execute`
+  requires a `PlayerRef`, and `/supporter grant` runs from console with no player. Admin
+  subcommands must extend `CommandBase` and override `executeSync(CommandContext)`, which
+  handles the console case explicitly via `ctx.isPlayer()`.
+- **E13's SQLite premise is false.** FactionMod contains no SQL at all — it is JSON files under
+  `plugins/FactionMod/`. There is no pattern to copy, and no precedent for SQLite on this
+  server. See the open decision below.
 
 ## Open decisions
 
-1. **Chat ownership (R6).** If FactionMod already cancels `PlayerChatEvent`, two plugins
-   re-broadcasting will double-render or drop messages. The fix is one renderer with the other
-   contributing a prefix through an API — but which plugin owns it is a call to make before any
-   Phase 2 code is written, and it probably means a change to FactionMod.
-2. **Chargeback vs expiry.** Both currently route through `revoke()`. A fraudulent chargeback
+1. **Chat ownership (R6) — largely resolved.** FactionMod cancels `PlayerChatEvent` *only* when
+   the player has faction chat toggled on, so SupporterMod can take global chat. One hazard
+   remains: a supporter in faction-chat mode would be handled by both plugins, leaking private
+   faction chat server-wide. SupporterMod's handler must skip already-cancelled events — which
+   needs confirmation from the server jar that later handlers can see cancellation state and
+   that handler order is deterministic. Settle this before writing Phase 2 chat code.
+2. **SQLite has no precedent on this server.** `sqlite-jdbc` unpacks a native library to a temp
+   directory at first use; if the environment forbids that it fails at runtime, not at compile
+   time. This should be the first thing tested on staging. Fallback is FactionMod's JSON
+   approach with an append-only audit log.
+3. **Chargeback vs expiry.** Both currently route through `revoke()`. A fraudulent chargeback
    arguably should also zero unspent tokens, which an ordinary expiry must not. Phase 5 needs a
    policy here.
-3. **`total_months`.** The spec asks for a column; this implementation derives it from
+4. **`total_months`.** The spec asks for a column; this implementation derives it from
    `total_days` instead, because an incrementing counter scores two 15-day grants as zero
    months. Confirm that matches the intent before the leaderboard ships.
-4. **The other four tables.** §2.1 names six; only the ones Phase 1 needs exist so far. They
+5. **The other four tables.** §2.1 names six; only the ones Phase 1 needs exist so far. They
    arrive as numbered migrations once the spec does.
 
 ## Suggested phase order
