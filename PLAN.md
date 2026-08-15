@@ -9,28 +9,26 @@ built, what is blocked, and the decisions still outstanding.
 |---|---|---|
 | 0 — Recon | **Mostly answered** | See PHASE0-RECON.md. A1, A2, C8, C9 need the server jar. |
 | 1 — Entitlement | **Core done, adapter blocked** | Service, storage, config, reconcile built and tested. Plugin class, commands and events need the server jar to compile. |
-| 2 — Identity | Unblocked on design, blocked on build | R6 resolved favourably; needs the server jar and HyUI. |
+| 2 — Identity | Unblocked on design, blocked on build | R6 resolved favourably; needs the server jar. |
 | 3 — Homes | Blocked | R5 needs the `mods/` listing. Teleport pattern confirmed. |
 | 4 — Trails | **Unblocked on design** | R2 confirmed viewer lists; asset format fully recovered. |
-| 5 — Tokens / shop | Blocked | Needs HyUI and Phase 4. |
+| 5 — Tokens / shop | Blocked | HyUI API recovered; needs the server jar and Phase 4. |
 | 6 — Community | Blocked | R1, R3, R4 all need the server jar. |
 
 ## Inputs needed
 
-FactionMod 1.19.13 has been supplied and analysed — see PHASE0-RECON.md. Still outstanding,
-ordered by what they unblock.
+FactionMod 1.19.13 and HyUI 0.9.8 have been supplied and analysed — see PHASE0-RECON.md.
+Still outstanding, ordered by what they unblock.
 
 1. **The Hytale server jar** — R1 (tab list), R3 (connection hook), R4 (display name), C9 (player
    cap), and the `PlayerChatEvent` cancellation semantics that Phase 2 depends on. Also needed on
    the compile classpath before any Hytale-facing code can be built.
-2. **The HyUI jar (`au.ellie.hyui`)** — a third-party library FactionMod's UI is built on, not
-   bundled in its jar and not part of the server. Blocks every panel in Phases 2, 5 and 6.
-3. **`SUPPORTERMOD_SPEC.md`** — without §2.1 the table set is guesswork, without §4 the config
+2. **`SUPPORTERMOD_SPEC.md`** — without §2.1 the table set is guesswork, without §4 the config
    keys are.
-4. **The `mods/` and `plugins/` directory listing**, plus any homes/essentials and
+3. **The `mods/` and `plugins/` directory listing**, plus any homes/essentials and
    LuckPerms-equivalent jars — D10 and D11.
-5. **The Tebex package's command string**, and whether it is configured to run offline.
-6. **A staging server** — above all to test whether `sqlite-jdbc` can unpack its native library
+4. **The Tebex package's command string**, and whether it is configured to run offline.
+5. **A staging server** — above all to test whether `sqlite-jdbc` can unpack its native library
    in the server environment. See the E13 note in the recon report; there is no SQLite precedent
    on this server, and that failure mode only appears at runtime.
 
@@ -124,3 +122,13 @@ locally; otherwise pass `-Porg.gradle.java.installations.paths=/path/to/jdk-25`.
 
 `pluginJar` bundles sqlite-jdbc and gson. If the server turns out to provide either, drop it
 from `build.gradle.kts` — a duplicate on the classpath is worse than a missing one.
+
+### Provided jars
+
+Drop the Hytale server jar and `HyUI-0.9.8-all.jar` into `libs/`. They are `compileOnly` —
+supplied at runtime by the platform, never bundled. `libs/` is gitignored (the server jar is
+large, HyUI is third-party), and an empty `libs/` is fine: the entitlement core and its 30 tests
+reference neither jar, so the build stays green without them.
+
+`reference/FactionMod-1.19.13.jar` is kept in-tree deliberately — it is the pattern reference
+every later phase is written against, and it is our own plugin.

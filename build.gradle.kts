@@ -23,8 +23,14 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.53.2.1")
     implementation("com.google.code.gson:gson:2.14.0")
 
-    // TODO(phase-0): compileOnly(files("libs/hytale-server.jar")) — the server jar is
-    // provided at runtime by the platform and must NOT be bundled into the plugin jar.
+    // Jars provided at runtime by the platform: the Hytale server itself, and HyUI, which is
+    // its own plugin (Group "Ellie", Main au.ellie.hyui.HyUIPlugin). compileOnly on purpose —
+    // bundling either would put a second copy on the classpath.
+    //
+    // These are NOT committed: the server jar is large and HyUI is third-party. Drop them in
+    // libs/ locally. The directory is gitignored, and an empty one is fine — the entitlement
+    // core and its tests do not reference either jar, so the build stays green without them.
+    compileOnly(fileTree("libs") { include("*.jar") })
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")

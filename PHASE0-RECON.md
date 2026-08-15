@@ -225,16 +225,27 @@ Whether LuckPerms is installed server-side is still unknown without the director
 
 ## E. Reference patterns
 
-### E12 — `ShopUI.open` · **ANSWERED, with a blocking dependency**
+### E12 — `ShopUI.open` · **ANSWERED** (HyUI 0.9.8 supplied and analysed)
 
 The UI is built on **HyUI — `au.ellie.hyui` — a third-party library that is NOT bundled in
-FactionMod's jar.** It must be provided at runtime by something else in `mods/`.
+FactionMod's jar.** It is its own plugin:
 
-Packages used: `PageBuilder`, `GroupBuilder`, `CustomButtonBuilder`, `LabelBuilder`,
-`ImageBuilder`, `CheckBoxBuilder`, `HyUIPage`, `HyUIStyle`, `HyUIPatchStyle`, `HyUIAnchor`,
-`Alignment`, `events.PageRefreshResult`.
+```json
+{ "Group": "Ellie", "Name": "HyUI", "Version": "0.9.8",
+  "ServerVersion": ">=0.5.0-pre.9 <0.6.0",
+  "Dependencies": { "Hytale:AssetModule": "*" },
+  "Main": "au.ellie.hyui.HyUIPlugin", "IncludesAssetPack": true }
+```
 
-The builder idiom, and the event binding the prompt names:
+A Kotlin library, ~1600 classes, shipping kotlin-stdlib and jsoup inside the `-all` jar. It must
+be `compileOnly` for us — bundling it would put a second copy on the classpath.
+
+**Latent bug in FactionMod, worth passing on:** its manifest declares no dependency on HyUI at
+all, despite its entire UI resting on it. Only `Economy:EconomySystem` is listed, and as
+*optional*. If HyUI ever loads after FactionMod, or fails to load, FactionMod's panels break with
+no declared ordering to prevent it. HyUI's own manifest has a `LoadBefore` field that is empty.
+
+The builder idiom FactionMod uses, and the event binding the prompt names:
 
 ```java
 GroupBuilder g = GroupBuilder.group().withId("FactionShopRoot").withAnchor(anchor);
@@ -245,9 +256,50 @@ g = g.addChild(b);
 ```
 
 Builders are immutable-ish — every `withX`/`addChild` returns a new instance that must be
-reassigned. The decompiler shows heavy casting because the builders use a self-type generic.
+reassigned, which is why the decompiled source is so cast-heavy.
 
-**I need the HyUI jar** to compile anything in Phases 2, 5 or 6 that opens a panel.
+Opening a page, from `PageBuilder`:
+
+```java
+PageBuilder.pageForPlayer(playerRef)          // or PageBuilder.detachedPage()
+    .withLifetime(CustomPageLifetime.…)
+    .withRefreshRate(millis)
+    .onRefresh(page -> PageRefreshResult…)     // periodic server-driven refresh
+    .onDismiss((page, byPlayer) -> …)
+    .open(playerRef, store);                   // -> HyUIPage
+```
+
+`HyUIPage` extends `com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage`
+and exposes `close()`, `updatePage(boolean)`, `editById(id, type, consumer)`, `getValue(id)` and
+`triggerRefresh()`. **`editById` plus `updatePage` means the prompt's "close-and-reopen after
+purchase" is unnecessary** — a purchase can mutate the open page in place.
+
+**Recommendation: do not copy ShopUI's builder-chain style.** HyUI 0.9.8 can build a page from an
+HTML template with variable substitution:
+
+```java
+T loadHtml(String path, Map<String, ?> vars);
+T fromHtml(String html);
+T fromUIFile(String path);
+T fromTemplate(String tpl, Map<String, ?> vars);
+```
+
+backed by a real parser (`au.ellie.hyui.html.HtmlParser`, `CssPreprocessor`, `TemplateProcessor`).
+FactionMod's `ShopUI` is 1251 lines of builder chains for one panel. The supporter shop, the
+`/supporters` list and the Phase 6 poll panel should be HTML templates with element ids bound to
+listeners — far less code, and editable without recompiling.
+
+Element ids and listeners work the same either way:
+
+```java
+builder.withId("SupporterShopBuyTrail");
+builder.addEventListener(CustomUIEventBindingType.Activating, EventData.class, data -> …);
+builder.addEventListenerWithContext(type, EventData.class, (data, ctx) -> …);
+```
+
+There is also a HUD API (`player.hud.HudManager`, `CustomUIHud`, and HyUI's `HudBuilder` /
+`MultipleHUD`). If R1 comes back negative, a small HUD overlay is a plausible substitute for a
+tab-list supporter badge — noted as a fallback, not a plan.
 
 ### E13 — SQLite initialisation · **THE PREMISE IS WRONG**
 
@@ -433,14 +485,15 @@ Relevant because Phase 5 must stay strictly separated from it.
 
 ## Inputs still needed
 
-| Input | Unblocks |
-|---|---|
-| **Hytale server jar** | R1, R3, R4, C9, the `PlayerChatEvent` cancellation semantics |
-| **HyUI jar (`au.ellie.hyui`)** | Every UI panel — Phases 2, 5, 6 |
-| **`mods/` + `plugins/` directory listing** | R5, D11 |
-| **`SUPPORTERMOD_SPEC.md`** | §2.1 tables, §3.x perks, §4 config keys |
-| **Tebex package command string** | Confirms the `/supporter grant` signature |
-| **Staging server** | The sqlite-jdbc native-library test above all else |
+| Input | Unblocks | Status |
+|---|---|---|
+| **Hytale server jar** | R1, R3, R4, C9, the `PlayerChatEvent` cancellation semantics | in transit |
+| **HyUI jar (`au.ellie.hyui`)** | Every UI panel — Phases 2, 5, 6 | **supplied, 0.9.8** |
+| **FactionMod jar** | 10 of the 14 questions here | **supplied, 1.19.13** |
+| **`mods/` + `plugins/` directory listing** | R5, D11 | outstanding |
+| **`SUPPORTERMOD_SPEC.md`** | §2.1 tables, §3.x perks, §4 config keys | outstanding |
+| **Tebex package command string** | Confirms the `/supporter grant` signature | outstanding |
+| **Staging server** | The sqlite-jdbc native-library test above all else | outstanding |
 
 ## Verdict on the two store-page perks
 
