@@ -15,6 +15,7 @@ import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
 import java.awt.Color;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.UUID;
@@ -26,11 +27,13 @@ import java.util.UUID;
  * SupporterService} owns all of it, and this class only decides when it is constructed and what
  * it is handed.
  *
- * <p><b>Startup failure is surfaced, not swallowed.</b> Phase 0b established that the server
- * bundles no JDBC driver, so {@code sqlite-jdbc} unpacks a native library at first use and can
- * fail at runtime in a way no compile check catches. If that happens, the plugin records the
- * reason and every command reports it rather than the server booting with a silently dead
- * supporter system that accepts grants and loses them.
+ * <p><b>Startup failure is surfaced, not swallowed.</b> The database layer can fail in ways no
+ * compile check catches, and the first live deploy proved it: the shaded JDBC driver never
+ * registered, because {@code DriverManager} discovers drivers via the system classloader and
+ * plugins load in their own. The plugin records the reason and every command reports it, rather
+ * than the server booting with a silently dead supporter system that accepts grants and loses
+ * them. That design is what turned a novel failure into a ten-minute fix — the log named the
+ * cause and the line number on the first try.
  *
  * <p>Shutdown is symmetric with setup and runs in reverse order. The host cancels ECS systems
  * for us, but schedulers, database handles and our own registrations are ours to release.
@@ -57,7 +60,13 @@ public final class SupporterPlugin extends JavaPlugin {
     protected void setup() {
         this.log = new HytaleLog(getLogger());
         try {
-            Path dataDir = getDataDirectory();
+            // NOT getDataDirectory(). That returns a path under mods/, and the asset module
+            // scans mods/ for asset packs — so our database folder gets picked up as a
+            // malformed pack and logs "Skipping pack at ThePeoplesServer_SupporterMod:
+            // missing or invalid manifest.json" on every single boot. FactionMod uses
+            // plugins/<Name>/ for exactly this reason; mods/ is for mods.
+            Path dataDir = Path.of("plugins", "SupporterMod");
+            Files.createDirectories(dataDir);
 
             this.config = SupporterConfig.load(dataDir.resolve("supporter.json"));
             this.storage = SupporterStorage.open(dataDir.resolve(config.databaseFile()));
