@@ -502,7 +502,7 @@ Relevant because Phase 5 must stay strictly separated from it.
 fallback also needs C9, which is equally unknown. Both halves need the server jar. **Do not list
 this perk until that is resolved.**
 
-**Perk 11 — `/nick`: UNPROVEN, leaning negative.** FactionMod renders every name by string
+**Perk 11 — `/nick`: DROPPED in Phase 6.** Not shipped. Beyond the nameplate being impossible, our chat tag wraps mini-chat-formatter rather than replacing it, so a nickname renders beside the real username — two names on one line. Original note: FactionMod renders every name by string
 concatenation into chat and never sets a server-side display name. A chat-only `/nick` is
 clearly buildable — the nameplate is the doubtful half. Needs the server jar. If it comes back
 chat-only, say so in the command's help text as the prompt already plans.

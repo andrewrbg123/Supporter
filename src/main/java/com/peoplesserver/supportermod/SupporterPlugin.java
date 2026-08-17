@@ -3,6 +3,7 @@ package com.peoplesserver.supportermod;
 import com.hypixel.hytale.event.EventPriority;
 import com.hypixel.hytale.server.core.event.events.player.PlayerChatEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerSetupConnectEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.peoplesserver.supportermod.command.SupporterCommand;
@@ -17,6 +18,7 @@ import com.peoplesserver.supportermod.platform.hytale.HytaleLog;
 import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
 import com.peoplesserver.supportermod.platform.hytale.LuckPermsSync;
+import com.peoplesserver.supportermod.platform.hytale.ReservedSlots;
 import com.peoplesserver.supportermod.platform.hytale.SupporterChatTag;
 import com.peoplesserver.supportermod.platform.hytale.TrailSystem;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
@@ -120,6 +122,16 @@ public final class SupporterPlugin extends JavaPlugin {
             SupporterChatTag chatTag = new SupporterChatTag(service, tagColor);
             getEventRegistry().registerGlobal(
                     EventPriority.LAST, PlayerChatEvent.class, chatTag::onPlayerChat);
+
+            // Phase 6. Reserved slots. Off unless reservedSlots > 0 — a perk that turns
+            // players away must never switch itself on by accident.
+            ReservedSlots reserved = new ReservedSlots(service, config.reservedSlots(), log);
+            if (reserved.enabled()) {
+                getEventRegistry().registerGlobal(
+                        PlayerSetupConnectEvent.class, reserved::onSetupConnect);
+                log.info("Reserved slots active: last " + config.reservedSlots()
+                        + " slot(s) held for supporters");
+            }
 
             // Phase 4. Runs continuously rather than on demand, so the guards inside
             // TrailSystem are what keep it affordable — see that class.

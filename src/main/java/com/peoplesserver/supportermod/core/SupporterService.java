@@ -110,6 +110,32 @@ public final class SupporterService {
     }
 
     /**
+     * Announces a brand-new supporter to the server, once.
+     *
+     * <p>Only on {@link GrantResult.Outcome#CREATED} — never on a renewal, and never on a
+     * duplicate delivery. Somebody who renews every month does not want the server told about
+     * it twelve times a year, and the payment provider retrying a command must not produce a
+     * second announcement.
+     */
+    private void announceIfNew(GrantResult result, String username) {
+        if (!config.announceNewSupporters()
+                || result == null
+                || result.outcome() != GrantResult.Outcome.CREATED) {
+            return;
+        }
+        String name = username != null ? username
+                : (result.record() != null ? result.record().username() : null);
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        try {
+            messenger.broadcast(name + " just became a supporter — thank you!");
+        } catch (RuntimeException e) {
+            log.error("Failed to announce new supporter " + name, e);
+        }
+    }
+
+    /**
      * Pushes a player's current entitlement out to the permissions plugin.
      *
      * <p>Called <b>after</b> the database transaction commits, never inside it: the permissions
@@ -570,6 +596,7 @@ public final class SupporterService {
         try {
             GrantResult result = storage.transact(() -> applyGrant(uuid, username, days, source, txn));
             syncPermissions(uuid);
+            announceIfNew(result, username);
             return result;
         } catch (SQLException e) {
             throw new StorageException("Failed to grant supporter to " + uuid, e);
@@ -614,6 +641,7 @@ public final class SupporterService {
             if (outcome.record() != null) {
                 syncPermissions(outcome.record().uuid());
             }
+            announceIfNew(outcome, username);
             return outcome;
         } catch (SQLException e) {
             throw new StorageException("Failed to grant supporter to " + username, e);

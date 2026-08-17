@@ -53,6 +53,28 @@ public final class HytaleMessenger implements Messenger {
                 Message.raw(message)));
     }
 
+    @Override
+    public void broadcast(String message) {
+        Universe universe = Universe.get();
+        if (universe == null || message == null) {
+            return;
+        }
+        Message line = Message.join(
+                Message.raw("[Supporter] ").color(tagColor),
+                Message.raw(message));
+        for (PlayerRef player : universe.getPlayers()) {
+            if (player == null) {
+                continue;
+            }
+            try {
+                player.sendMessage(line);
+            } catch (RuntimeException e) {
+                // One player disconnecting mid-loop must not swallow the announcement for
+                // everybody else.
+            }
+        }
+    }
+
     /** Sends without the plugin prefix — for command replies, which carry their own framing. */
     public void sendPlain(UUID uuid, String message, Color color) {
         PlayerRef player = online(uuid);

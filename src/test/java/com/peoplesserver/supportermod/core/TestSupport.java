@@ -86,10 +86,16 @@ final class TestSupport {
 
     static final class RecordingMessenger implements Messenger {
         final List<String> sent = new ArrayList<>();
+        final List<String> broadcasts = new ArrayList<>();
 
         @Override
         public void send(UUID uuid, String message) {
             sent.add(uuid + ": " + message);
+        }
+
+        @Override
+        public void broadcast(String message) {
+            broadcasts.add(message);
         }
 
         boolean sentContaining(String fragment) {

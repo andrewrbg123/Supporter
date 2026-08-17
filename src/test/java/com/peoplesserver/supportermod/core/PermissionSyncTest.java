@@ -83,6 +83,41 @@ class PermissionSyncTest {
     }
 
     @Test
+    @DisplayName("a brand-new supporter is announced once, and a renewal is not")
+    void announcesOnlyOnce() {
+        RecordingMessenger msgr = new RecordingMessenger();
+        FakeDirectory dir = new FakeDirectory();
+        dir.register("Alice", ALICE);
+        SupporterService svc = new SupporterService(
+                storage, config, clock, dir, msgr, PluginLog.console(), sync);
+
+        svc.grant(ALICE, "Alice", 30, "test", null);
+        assertEquals(1, msgr.broadcasts.size(), "a first grant should announce");
+
+        svc.grant(ALICE, "Alice", 30, "test", null);
+        assertEquals(1, msgr.broadcasts.size(),
+                "a renewal must not announce again — monthly renewals would be twelve a year");
+
+        assertTrue(msgr.broadcasts.get(0).contains("Alice"));
+    }
+
+    @Test
+    @DisplayName("a duplicate payment delivery does not announce twice")
+    void duplicateDeliveryDoesNotAnnounce() {
+        RecordingMessenger msgr = new RecordingMessenger();
+        FakeDirectory dir = new FakeDirectory();
+        dir.register("Alice", ALICE);
+        SupporterService svc = new SupporterService(
+                storage, config, clock, dir, msgr, PluginLog.console(), sync);
+
+        svc.grant(ALICE, "Alice", 30, "tebex", "txn-9");
+        svc.grant(ALICE, "Alice", 30, "tebex", "txn-9");   // provider retry
+
+        assertEquals(1, msgr.broadcasts.size(),
+                "Tebex retries until acknowledged; the retry must not re-announce");
+    }
+
+    @Test
     @DisplayName("a grant pushes permissions out")
     void grantSyncs() {
         service.grant(ALICE, "Alice", 30, "test", null);
