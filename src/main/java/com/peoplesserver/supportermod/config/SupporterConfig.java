@@ -37,8 +37,27 @@ public final class SupporterConfig {
     private List<String> titleBlocklist = List.of();
 
     // --- Phase 3: homes -------------------------------------------------------------------
-    private int defaultHomeSlots = 2;
-    private int supporterHomeSlots = 5;
+    //
+    // THESE ARE DESCRIPTIVE, NOT ENFORCED. SupporterMod does not implement homes and does not
+    // police these numbers — EliteEssentials owns /home, /sethome and /delhome on this server,
+    // and resolves the limit through LuckPerms:
+    //
+    //   eliteessentials.command.home.limit.unlimited
+    //   eliteessentials.command.home.limit.<N>      (highest value wins)
+    //   homes.limit.<N>
+    //   ConfigManager.getMaxHomes()                 (fallback, mods/EliteEssentials/config.json)
+    //
+    // Building a second home system inside SupporterMod would mean two competing /home
+    // commands, so the perk is delivered by configuring those instead. What these keys do is
+    // drive what /supporter perks TELLS players — so if you change the real limits in
+    // EliteEssentials or LuckPerms, change them here too or the plugin will advertise a perk
+    // that does not match reality.
+    //
+    // Verified before changing the live limit: lowering it only makes /sethome return
+    // LIMIT_REACHED. HomeService has no bulk delete, so existing homes above the new cap are
+    // kept and stay usable.
+    private int defaultHomeSlots = 3;
+    private int supporterHomeSlots = 10;
     private int defaultHomeCooldownSec = 300;
     private int supporterHomeCooldownSec = 60;
 

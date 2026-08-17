@@ -62,6 +62,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new ColorSub(plugin));
         addSubCommand(new TrailSub(plugin));
         addSubCommand(new TrailsVisibilitySub(plugin));
+        addSubCommand(new PerksSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
@@ -437,6 +438,59 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (RuntimeException e) {
                 err(ctx, "Could not save that: " + e.getMessage());
                 plugin.log().error("setHideTrails failed", e);
+            }
+        }
+    }
+
+    // --- /supporter perks ---------------------------------------------------------------------
+
+    /**
+     * What supporters get, and what the player currently has.
+     *
+     * <p>Doubles as the source of truth for the store page: if this and the shop disagree with
+     * what the store advertises, the store is wrong.
+     *
+     * <p>The home numbers come from config and are <b>descriptive only</b> — EliteEssentials
+     * owns homes on this server and resolves limits through LuckPerms. If those are changed,
+     * {@code supporter.json} has to be changed to match or this command lies to players.
+     */
+    public static final class PerksSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public PerksSub(SupporterPlugin plugin) {
+            super("perks", "What supporter rank gets you.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            var config = plugin.config();
+            UUID uuid = player.getUuid();
+            boolean active = service.isSupporter(uuid);
+
+            ok(ctx, active ? "Supporter perks — you have these now:" : "Supporter perks:");
+            info(ctx, "  Chat tag, custom title and chat colour");
+            info(ctx, "    /supporter title <text>, /supporter colour <hex>");
+            info(ctx, "  Particle trails — " + config.trails().size() + " to choose from");
+            info(ctx, "    /supporter trail <name>, /supporter shop");
+            info(ctx, "  Homes: " + config.supporterHomeSlots()
+                    + " instead of " + config.defaultHomeSlots());
+            info(ctx, "  Tokens: " + config.tokensPerMonth() + " per month of support");
+
+            if (active) {
+                info(ctx, "");
+                ok(ctx, "You: " + service.daysRemaining(uuid) + " day(s) left, "
+                        + service.tokenBalance(uuid) + " token(s), "
+                        + service.unlocks(uuid).size() + " unlock(s).");
+            } else {
+                info(ctx, "");
+                info(ctx, "You are not a supporter yet.");
             }
         }
     }
