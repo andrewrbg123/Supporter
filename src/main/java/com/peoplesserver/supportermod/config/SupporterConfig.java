@@ -76,6 +76,15 @@ public final class SupporterConfig {
     // --- Phase 5: tokens ------------------------------------------------------------------
     private int tokensPerMonth = 100;
 
+    /**
+     * Trail id → cost in tokens. Absent or 0 means free to every supporter.
+     *
+     * <p>Prices are configuration so the ladder can be retuned without a rebuild and without
+     * touching what anybody already owns — an unlock is recorded with the price paid, so
+     * lowering a price later never retroactively charges or refunds.
+     */
+    private Map<String, Integer> trailCosts = defaultTrailCosts();
+
     // --- Phase 6: priority queue ----------------------------------------------------------
     private int reservedSlots = 0;
 
@@ -213,7 +222,12 @@ public final class SupporterConfig {
             throw new IllegalStateException(
                     "trailIntervalTicks must be >= 1, got " + trailIntervalTicks);
         }
+        if (tokensPerMonth < 0) {
+            throw new IllegalStateException(
+                    "tokensPerMonth must be >= 0, got " + tokensPerMonth);
+        }
         backfillTrails();
+        backfillTrailCosts();
     }
 
     /**
@@ -228,6 +242,44 @@ public final class SupporterConfig {
      * <p>An admin who deliberately renames or removes a trail keeps their change: only ids that
      * are absent are added back.
      */
+    /** Cost of a trail in tokens; 0 when free or unpriced. */
+    public int trailCost(String trailId) {
+        if (trailCosts == null || trailId == null) {
+            return 0;
+        }
+        Integer cost = trailCosts.get(trailId);
+        return cost == null || cost < 0 ? 0 : cost;
+    }
+
+    public Map<String, Integer> trailCosts() {
+        return trailCosts == null ? Map.of() : Collections.unmodifiableMap(trailCosts);
+    }
+
+    /**
+     * A ladder, not a paywall: two trails are free so every supporter gets the perk
+     * immediately, and the rest are something to spend tenure on. At the default 100 tokens a
+     * month, the cheapest paid trail is about six weeks of support.
+     */
+    static Map<String, Integer> defaultTrailCosts() {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        out.put("sparkle", 0);
+        out.put("dust", 0);
+        out.put("snow", 150);
+        out.put("gold", 200);
+        out.put("heal", 250);
+        out.put("morph", 300);
+        return out;
+    }
+
+    private void backfillTrailCosts() {
+        if (trailCosts == null) {
+            trailCosts = new LinkedHashMap<>();
+        } else {
+            trailCosts = new LinkedHashMap<>(trailCosts);
+        }
+        defaultTrailCosts().forEach(trailCosts::putIfAbsent);
+    }
+
     private void backfillTrails() {
         if (trails == null) {
             trails = new LinkedHashMap<>();

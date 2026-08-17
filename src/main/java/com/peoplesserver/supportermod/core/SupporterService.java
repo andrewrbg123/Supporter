@@ -280,6 +280,22 @@ public final class SupporterService {
                 + String.join(", ", config.trails().keySet()));
     }
 
+    /**
+     * Same as {@link #setTrail} but refuses a trail the player has not unlocked.
+     *
+     * <p>Ownership is checked here rather than only in the command, so a future UI cannot
+     * accidentally bypass it.
+     */
+    public synchronized SupporterIdentity selectTrail(UUID uuid, String trailId) {
+        String clean = validateTrail(trailId);
+        if (clean != null && !owns(uuid, clean)) {
+            throw new IllegalArgumentException("You have not unlocked " + clean
+                    + " — it costs " + config.trailCost(clean)
+                    + " tokens. /supporter shop to see what you can afford.");
+        }
+        return setTrail(uuid, clean);
+    }
+
     private SupporterIdentity writeIdentity(
             UUID uuid, SupporterIdentity updated, String action, String detail) {
         Objects.requireNonNull(uuid, "uuid");
@@ -341,6 +357,160 @@ public final class SupporterService {
         }
         throw new IllegalArgumentException("Not an available colour. Choose from: "
                 + String.join(", ", config.allowedChatColors()));
+    }
+
+    // --- tokens (Phase 5) -------------------------------------------------------------------
+
+    /** Outcome of a purchase attempt. */
+    public enum PurchaseResult {
+        BOUGHT,
+        /** Already owned — not an error, and never charged twice. */
+        ALREADY_OWNED,
+        NOT_ENOUGH_TOKENS,
+        /** The item id is not in the catalogue. */
+        UNKNOWN_ITEM,
+        /** Free items need no purchase. */
+        FREE
+    }
+
+    /**
+     * Tokens earned, derived from tenure rather than counted.
+     *
+     * <p>Deriving is what makes this safe. A stored balance can be double-credited by a retried
+     * grant, drift after a crash between the write and the credit, or silently disagree with the
+     * purchase history. {@code totalMonths × tokensPerMonth} cannot: it is a pure function of a
+     * number the entitlement path already maintains carefully, and recomputing it always gives
+     * the same answer. Same argument as {@code total_months} itself.
+     */
+    public int tokensEarned(UUID uuid) {
+        return get(uuid).map(r -> r.totalMonths() * config.tokensPerMonth()).orElse(0);
+    }
+
+    public int tokensSpent(UUID uuid) {
+        try {
+            return storage.totalSpent(uuid);
+        } catch (SQLException e) {
+            throw new StorageException("Failed to read token spend for " + uuid, e);
+        }
+    }
+
+    /**
+     * Spendable tokens.
+     *
+     * <p>Clamped at zero: a chargeback removes tenure and so removes earned tokens, which can
+     * leave somebody having spent more than they now have. Their unlocks are kept — never delete
+     * something a player paid for — but they cannot buy again until tenure catches up.
+     */
+    public int tokenBalance(UUID uuid) {
+        return Math.max(0, tokensEarned(uuid) - tokensSpent(uuid));
+    }
+
+    public boolean owns(UUID uuid, String itemId) {
+        if (itemId == null) {
+            return false;
+        }
+        if (config.trailCost(itemId) <= 0) {
+            return true; // free items are owned by everyone
+        }
+        try {
+            return storage.ownsUnlock(uuid, itemId);
+        } catch (SQLException e) {
+            throw new StorageException("Failed to read unlocks for " + uuid, e);
+        }
+    }
+
+    public List<String> unlocks(UUID uuid) {
+        try {
+            return storage.unlocksFor(uuid);
+        } catch (SQLException e) {
+            throw new StorageException("Failed to list unlocks for " + uuid, e);
+        }
+    }
+
+    /**
+     * Buys a trail with tokens.
+     *
+     * <p>The whole thing runs in one transaction and the affordability check is re-read inside
+     * it, so two commands racing cannot both pass the check and both spend.
+     */
+    public synchronized PurchaseResult purchaseTrail(UUID uuid, String trailId) {
+        Objects.requireNonNull(uuid, "uuid");
+        if (trailId == null || !config.trails().containsKey(trailId)) {
+            return PurchaseResult.UNKNOWN_ITEM;
+        }
+        int cost = config.trailCost(trailId);
+        if (cost <= 0) {
+            return PurchaseResult.FREE;
+        }
+        try {
+            return storage.transact(() -> {
+                if (storage.ownsUnlock(uuid, trailId)) {
+                    return PurchaseResult.ALREADY_OWNED;
+                }
+                int balance = Math.max(0,
+                        tokensEarned(uuid) - storage.totalSpent(uuid));
+                if (balance < cost) {
+                    return PurchaseResult.NOT_ENOUGH_TOKENS;
+                }
+                long now = clock.millis();
+                if (!storage.addUnlock(uuid, trailId, cost, now)) {
+                    return PurchaseResult.ALREADY_OWNED; // lost a race; nothing charged
+                }
+                storage.log(uuid, directory.usernameFor(uuid).orElse(null),
+                        "PURCHASE", trailId + " for " + cost + " tokens", "player", now);
+                return PurchaseResult.BOUGHT;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Purchase failed for " + uuid, e);
+        }
+    }
+
+    /**
+     * Removes tenure that was never actually paid for.
+     *
+     * <p>This is the answer to PLAN.md open decision 3, "chargeback vs expiry". They are not the
+     * same event and must not behave the same way:
+     *
+     * <ul>
+     *   <li>An <b>expiry or revoke</b> ends entitlement and leaves tenure alone. The player did
+     *       pay for that time, so they keep the tokens it earned.
+     *   <li>A <b>chargeback</b> means the money came back. The tenure was never paid for, so it
+     *       is removed — and because the balance is derived from tenure, the tokens go with it
+     *       automatically. There is no separate token ledger to keep in step.
+     * </ul>
+     *
+     * <p>Unlocks already bought are NOT removed. Clawing back an item somebody is using is a
+     * support argument nobody wins, and {@link #tokenBalance} clamps at zero, so the effect is
+     * simply that they cannot buy anything more until tenure catches up.
+     */
+    public synchronized void chargeback(UUID uuid, int days, String actor) {
+        Objects.requireNonNull(uuid, "uuid");
+        if (days <= 0) {
+            throw new IllegalArgumentException("days must be positive, got " + days);
+        }
+        try {
+            storage.transact(() -> {
+                Optional<SupporterRecord> existing = storage.find(uuid);
+                if (existing.isEmpty()) {
+                    return null;
+                }
+                SupporterRecord r = existing.get();
+                long now = clock.millis();
+                int remaining = Math.max(0, r.totalDays() - days);
+                SupporterRecord updated = new SupporterRecord(
+                        r.uuid(), r.username(), false, r.firstGrantedAt(), r.lastGrantedAt(),
+                        Math.min(r.expiresAt(), now), Math.min(r.graceUntil(), now),
+                        remaining, r.source());
+                storage.upsert(updated);
+                cache.remove(uuid);
+                storage.log(uuid, r.username(), "CHARGEBACK",
+                        days + "d removed, tenure now " + remaining + "d", actor, now);
+                log.warn("Chargeback for " + uuid + ": " + days + "d removed by " + actor);
+                return null;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Chargeback failed for " + uuid, e);
+        }
     }
 
     // --- writes ---------------------------------------------------------------------------

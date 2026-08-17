@@ -62,6 +62,10 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new ColorSub(plugin));
         addSubCommand(new TrailSub(plugin));
         addSubCommand(new TrailsVisibilitySub(plugin));
+        addSubCommand(new TokensSub(plugin));
+        addSubCommand(new ShopSub(plugin));
+        addSubCommand(new BuySub(plugin));
+        addSubCommand(new ChargebackSub(plugin));
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
         addSubCommand(new ReconcileSub(plugin));
@@ -352,7 +356,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             try {
-                SupporterIdentity updated = service.setTrail(uuid, trail);
+                // selectTrail, not setTrail: it refuses a trail the player has not unlocked.
+                SupporterIdentity updated = service.selectTrail(uuid, trail);
                 if (updated.hasTrail()) {
                     ok(ctx, "Trail set to " + updated.trail() + ". Walk around to see it.");
                 } else {
@@ -432,6 +437,167 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (RuntimeException e) {
                 err(ctx, "Could not save that: " + e.getMessage());
                 plugin.log().error("setHideTrails failed", e);
+            }
+        }
+    }
+
+    // --- /supporter tokens --------------------------------------------------------------------
+
+    public static final class TokensSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public TokensSub(SupporterPlugin plugin) {
+            super("tokens", "Show your token balance.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            UUID uuid = player.getUuid();
+            int earned = service.tokensEarned(uuid);
+            int spent = service.tokensSpent(uuid);
+            ok(ctx, "Tokens: " + service.tokenBalance(uuid)
+                    + "  (earned " + earned + ", spent " + spent + ")");
+            info(ctx, "You earn " + plugin.config().tokensPerMonth()
+                    + " per whole month of support. /supporter shop to spend them.");
+        }
+    }
+
+    // --- /supporter shop ----------------------------------------------------------------------
+
+    public static final class ShopSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public ShopSub(SupporterPlugin plugin) {
+            super("shop", "See what your tokens can buy.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            UUID uuid = player.getUuid();
+            int balance = service.tokenBalance(uuid);
+            ok(ctx, "Supporter shop — you have " + balance + " token(s):");
+            for (String id : plugin.config().trails().keySet()) {
+                int cost = plugin.config().trailCost(id);
+                String state;
+                if (cost <= 0) {
+                    state = "free";
+                } else if (service.owns(uuid, id)) {
+                    state = "owned";
+                } else if (balance >= cost) {
+                    state = cost + " tokens — /supporter buy " + id;
+                } else {
+                    state = cost + " tokens (need " + (cost - balance) + " more)";
+                }
+                info(ctx, "  " + id + " — " + state);
+            }
+        }
+    }
+
+    // --- /supporter buy <id> ------------------------------------------------------------------
+
+    public static final class BuySub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument idArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public BuySub(SupporterPlugin plugin) {
+            super("buy", "Spend tokens on a trail: <name>");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.idArg = withRequiredArg("item", "what to buy", (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            UUID uuid = player.getUuid();
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "The shop is for supporters. /supporter to find out more.");
+                return;
+            }
+            String item = String.valueOf(ctx.get(idArg)).trim();
+            try {
+                switch (service.purchaseTrail(uuid, item)) {
+                    case BOUGHT -> ok(ctx, "Unlocked " + item + "! Use /supporter trail "
+                            + item + " to wear it. Tokens left: " + service.tokenBalance(uuid));
+                    case ALREADY_OWNED -> info(ctx, "You already own " + item + ".");
+                    case FREE -> info(ctx, item + " is free — just /supporter trail " + item + ".");
+                    case NOT_ENOUGH_TOKENS -> err(ctx, "Not enough tokens. "
+                            + item + " costs " + plugin.config().trailCost(item)
+                            + ", you have " + service.tokenBalance(uuid) + ".");
+                    case UNKNOWN_ITEM -> err(ctx, "No such item. /supporter shop to see the list.");
+                }
+            } catch (RuntimeException e) {
+                err(ctx, "Purchase failed: " + e.getMessage());
+                plugin.log().error("purchaseTrail failed for " + uuid, e);
+            }
+        }
+    }
+
+    // --- /supporter chargeback <player> <days> ------------------------------------------------
+
+    /**
+     * Console-capable, because a chargeback notification arrives by email, not in game.
+     *
+     * <p>Distinct from revoke on purpose: revoke ends entitlement but keeps the tenure the
+     * player paid for, while a chargeback removes tenure that was never paid for — and since
+     * tokens are derived from tenure, they go with it. Items already bought are kept.
+     */
+    public static final class ChargebackSub extends CommandBase {
+        private final SupporterPlugin plugin;
+        private final Argument playerArg;
+        private final Argument daysArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public ChargebackSub(SupporterPlugin plugin) {
+            super("chargeback", "Remove unpaid tenure after a chargeback: <player> <days>");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+            this.playerArg = withRequiredArg("player", "username", (ArgumentType) ArgTypes.STRING);
+            this.daysArg = withRequiredArg("days", "days to remove",
+                    (ArgumentType) ArgTypes.INTEGER);
+        }
+
+        @Override
+        protected void executeSync(CommandContext ctx) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            String username = String.valueOf(ctx.get(playerArg)).trim();
+            int days = (Integer) ctx.get(daysArg);
+            Optional<SupporterRecord> record = service.findByUsername(username);
+            if (record.isEmpty()) {
+                err(ctx, "No supporter record for " + username + ".");
+                return;
+            }
+            try {
+                service.chargeback(record.get().uuid(), days, ctx.sender().getUsername());
+                ok(ctx, "Chargeback applied to " + username + " — " + days
+                        + " day(s) of tenure removed. Items they already bought are kept.");
+            } catch (IllegalArgumentException e) {
+                err(ctx, e.getMessage());
+            } catch (RuntimeException e) {
+                err(ctx, "Chargeback failed: " + e.getMessage());
+                plugin.log().error("chargeback failed for " + username, e);
             }
         }
     }

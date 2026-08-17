@@ -67,7 +67,7 @@ Still outstanding, ordered by what they unblock.
    directory at first use; if the environment forbids that it fails at runtime, not at compile
    time. This should be the first thing tested on staging. Fallback is FactionMod's JSON
    approach with an append-only audit log.
-3. **Chargeback vs expiry.** Both currently route through `revoke()`. A fraudulent chargeback
+3. **Chargeback vs expiry — RESOLVED in Phase 5.** An expiry or revoke keeps tenure and therefore keeps earned tokens; a chargeback removes tenure via `/supporter chargeback`, and because the balance is derived the tokens follow automatically. Items already bought are kept and the balance clamps at zero. Original note: Both currently route through `revoke()`. A fraudulent chargeback
    arguably should also zero unspent tokens, which an ordinary expiry must not. Phase 5 needs a
    policy here.
 4. **`total_months`.** The spec asks for a column; this implementation derives it from

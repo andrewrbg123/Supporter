@@ -109,6 +109,30 @@ final class Migrations {
                 // than being inferred from entitlement. A player who has never been a
                 // supporter simply gets a row with only this column set.
                 "ALTER TABLE supporter_identity ADD COLUMN hide_trails INTEGER NOT NULL DEFAULT 0"
+            },
+            // --- V4: Phase 5 tokens ------------------------------------------------------
+            new String[] {
+                """
+                -- Things a player has bought with tokens.
+                --
+                -- There is deliberately NO balance column anywhere. The balance is derived:
+                -- earned (from tenure) minus the sum of these costs. A stored counter can
+                -- drift, be double-credited on a retry, or disagree with the purchase history
+                -- after a crash; a derived one cannot. Same reasoning as total_months.
+                --
+                -- The composite PRIMARY KEY is what makes a purchase idempotent: buying the
+                -- same item twice is refused by the database, not by a check that could race.
+                --
+                -- Rows are never deleted. An expiry, a revoke and a chargeback all leave
+                -- unlocks alone — never delete something a player paid for.
+                CREATE TABLE supporter_unlocks (
+                    uuid        TEXT    NOT NULL,
+                    item_id     TEXT    NOT NULL,
+                    cost        INTEGER NOT NULL,
+                    unlocked_at INTEGER NOT NULL,
+                    PRIMARY KEY (uuid, item_id)
+                )
+                """
             });
 
     static void apply(Connection conn) throws SQLException {

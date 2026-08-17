@@ -319,6 +319,73 @@ public final class SupporterStorage implements AutoCloseable {
         }
     }
 
+    // --- unlocks / tokens (Phase 5) ---------------------------------------------------------
+
+    /** Tokens this player has spent — the sum of what they actually bought. */
+    public synchronized int totalSpent(UUID uuid) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "SELECT COALESCE(SUM(cost), 0) FROM supporter_unlocks WHERE uuid = ?")) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    public synchronized boolean ownsUnlock(UUID uuid, String itemId) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "SELECT 1 FROM supporter_unlocks WHERE uuid = ? AND item_id = ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    public synchronized List<String> unlocksFor(UUID uuid) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "SELECT item_id FROM supporter_unlocks WHERE uuid = ? ORDER BY unlocked_at")) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                List<String> out = new ArrayList<>();
+                while (rs.next()) {
+                    out.add(rs.getString(1));
+                }
+                return out;
+            }
+        }
+    }
+
+    /**
+     * Records a purchase.
+     *
+     * <p>{@code DO NOTHING} on conflict, and the caller checks the row count: a double-click or
+     * a retried command cannot charge twice, because the composite primary key refuses the
+     * second row rather than a check that could race against itself.
+     *
+     * @return true if this call actually bought it
+     */
+    public synchronized boolean addUnlock(UUID uuid, String itemId, int cost, long atMs)
+            throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        """
+                        INSERT INTO supporter_unlocks(uuid, item_id, cost, unlocked_at)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(uuid, item_id) DO NOTHING
+                        """)) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, itemId);
+            ps.setInt(3, cost);
+            ps.setLong(4, atMs);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
     // --- transactions ---------------------------------------------------------------------
 
     /** Body of a transaction. */
