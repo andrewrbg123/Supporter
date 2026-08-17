@@ -112,6 +112,39 @@ class SupporterServiceTest {
     }
 
     @Test
+    @DisplayName("a repeated transaction is ignored on the by-username path the store uses")
+    void duplicateTransactionIgnoredByUsername() {
+        // The store runs "supporter grant {username} 30 {transaction}", which reaches
+        // grantByUsername — a different method from grant(uuid, ...). The idempotency guard has
+        // to hold on THIS path, because it is the only one a real purchase ever takes.
+        directory.register("Alice", ALICE);
+
+        service.grantByUsername("Alice", 30, "tebex", "txn-live-1");
+        GrantResult retry = service.grantByUsername("Alice", 30, "tebex", "txn-live-1");
+
+        assertEquals(GrantResult.Outcome.DUPLICATE_IGNORED, retry.outcome());
+        assertEquals(30, service.daysRemaining(ALICE),
+                "a provider retry must not deliver the purchase twice");
+    }
+
+    @Test
+    @DisplayName("a queued purchase is not re-queued when the provider retries")
+    void duplicateTransactionIgnoredWhileQueued() {
+        // Gift purchase for somebody who has never logged in: no UUID to resolve, so the grant
+        // is queued. A retry before they log in must not queue it a second time, or they would
+        // claim both on their first join.
+        service.grantByUsername("Newcomer", 30, "tebex", "txn-gift-1");
+        GrantResult retry = service.grantByUsername("Newcomer", 30, "tebex", "txn-gift-1");
+
+        assertEquals(GrantResult.Outcome.DUPLICATE_IGNORED, retry.outcome());
+
+        UUID newcomer = UUID.fromString("00000000-0000-0000-0000-0000000000e5");
+        service.onLogin(newcomer, "Newcomer");
+        assertEquals(30, service.daysRemaining(newcomer),
+                "one purchase, one grant — even if it was queued when the retry arrived");
+    }
+
+    @Test
     @DisplayName("manual grants without a transaction id are not deduplicated")
     void manualGrantsAlwaysApply() {
         service.grant(ALICE, "Alice", 7, "admin", null);

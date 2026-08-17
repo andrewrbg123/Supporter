@@ -630,6 +630,15 @@ public final class SupporterService {
                 if (resolved.isPresent()) {
                     return applyGrant(resolved.get(), username, days, source, txn);
                 }
+                // Second duplicate check, against the queue this time. The ledger check above
+                // only catches a transaction that has been DELIVERED; one that is still waiting
+                // for its player to log in lives in pending_grants and nowhere else. Without
+                // this, a provider retry adds a second pending row.
+                if (txn != null && !txn.isBlank() && storage.pendingTxnExists(txn)) {
+                    log.warn("Ignoring retry of transaction " + txn + " — already queued for "
+                            + username);
+                    return duplicate(null);
+                }
                 long now = clock.millis();
                 storage.addPendingGrant(username, days, source, txn, now);
                 storage.log(null, username, "GRANT_QUEUED",

@@ -217,6 +217,25 @@ public final class SupporterStorage implements AutoCloseable {
 
     // --- pending grants -------------------------------------------------------------------
 
+    /**
+     * True if this transaction is already sitting in the queue, claimed or not.
+     *
+     * <p>Needed because a queued grant is NOT written to {@code supporter_txn} — it cannot be,
+     * since the ledger records a delivery and a queued grant has not been delivered yet (it has
+     * no uuid to record against, and writing it early would make the claim at login look like a
+     * duplicate and silently drop the purchase). So the queue is its own duplicate check, and a
+     * provider retry has to be tested against both.
+     */
+    public synchronized boolean pendingTxnExists(String txn) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement("SELECT 1 FROM pending_grants WHERE txn = ?")) {
+            ps.setString(1, txn);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
     public synchronized void addPendingGrant(
             String username, int days, String source, String txn, long atMs) throws SQLException {
         try (PreparedStatement ps =
