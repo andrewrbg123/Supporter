@@ -81,15 +81,23 @@ public final class SupporterPlugin extends JavaPlugin {
             Color tagColor = tagColor(config);
             this.messenger = new HytaleMessenger(tagColor);
             this.directory = new HytalePlayerDirectory();
-            // LuckPerms is optional: absent, this degrades to a no-op and every other perk
-            // still works, because they are gated on SupporterService rather than permissions.
-            PermissionSync permissions = LuckPermsSync.available()
-                    ? new LuckPermsSync(config.luckPermsNodes(), log)
-                    : PermissionSync.noop();
+            // LuckPerms is resolved LAZILY, on first use, never here.
+            //
+            // setup() runs long before other plugins are enabled — the live server logged
+            // "LuckPerms NOT found" at 10:22:54 and "Enabled plugin LuckPerms:LuckPerms" at
+            // 10:23:05, eleven seconds later. Probing at startup therefore caches a "no" that
+            // is wrong for the entire session. First use is a grant or a login, by which point
+            // every plugin is up.
+            //
+            // Still optional: if LuckPerms genuinely is absent, each call degrades to a logged
+            // no-op and every other perk keeps working, because they are gated on
+            // SupporterService rather than on permissions.
+            PermissionSync permissions = config.luckPermsNodes().isEmpty()
+                    ? PermissionSync.noop()
+                    : new LuckPermsSync(config.luckPermsNodes(), log);
             if (!config.luckPermsNodes().isEmpty()) {
-                log.info(LuckPermsSync.available()
-                        ? "LuckPerms found — syncing " + config.luckPermsNodes().size() + " node(s)"
-                        : "LuckPerms NOT found — permission-gated perks (homes) will not apply");
+                log.info("Permission sync armed for " + config.luckPermsNodes().size()
+                        + " node(s) — LuckPerms is resolved on first use");
             }
 
             this.service = new SupporterService(

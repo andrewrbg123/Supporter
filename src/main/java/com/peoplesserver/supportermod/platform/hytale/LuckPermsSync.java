@@ -49,11 +49,16 @@ public final class LuckPermsSync implements PermissionSync {
         this.log = log;
     }
 
+    /** Logged once, so a genuinely missing LuckPerms is reported without flooding. */
+    private volatile boolean warnedMissing;
+
     /**
-     * True if LuckPerms is loaded and there is anything to sync.
+     * True if LuckPerms is reachable right now.
      *
-     * <p>Resolved lazily rather than at construction: plugin load order is not guaranteed, and
-     * asking too early throws {@code IllegalStateException} rather than returning null.
+     * <p><b>Never call this at plugin startup.</b> {@code setup()} runs before other plugins are
+     * enabled — the live server logged this returning false eleven seconds before LuckPerms was
+     * enabled — so a startup probe caches a "no" that is wrong for the whole session. Resolve on
+     * use instead; by the time a grant or a login happens, everything is up.
      */
     public static boolean available() {
         try {
@@ -111,9 +116,16 @@ public final class LuckPermsSync implements PermissionSync {
                         return null;
                     });
         } catch (Throwable t) {
-            // LuckPerms absent or not ready. Not fatal: every other perk is gated on
-            // SupporterService and is unaffected.
-            log.warn("LuckPerms " + what + " skipped (" + t.getClass().getSimpleName() + ")");
+            // LuckPerms absent, or its classes not visible to this plugin's classloader. Not
+            // fatal: every other perk is gated on SupporterService and is unaffected. Logged
+            // once rather than on every grant, but logged loudly the first time — silently
+            // skipping means a paying customer without the perk they bought.
+            if (!warnedMissing) {
+                warnedMissing = true;
+                log.warn("LuckPerms unavailable (" + t.getClass().getSimpleName()
+                        + ") — permission-gated perks such as homes will NOT be applied. "
+                        + "Check LuckPerms is installed and declared in OptionalDependencies.");
+            }
         }
     }
 }
