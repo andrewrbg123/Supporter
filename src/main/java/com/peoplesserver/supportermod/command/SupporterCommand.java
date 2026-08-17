@@ -75,6 +75,15 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new ReconcileSub(plugin));
     }
 
+    /**
+     * The root is public. It is the entry point every player has to be able to see — the admin
+     * subcommands underneath keep their own permissions and are filtered individually.
+     */
+    @Override
+    protected boolean canGeneratePermission() {
+        return false;
+    }
+
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef player, World world) {
@@ -112,9 +121,46 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         ctx.sendMessage(Message.raw(text).color(INFO));
     }
 
+    /**
+     * A player-facing command that is deliberately not permission-gated.
+     *
+     * <p>Discovery and execution are two different checks, and having them disagree is the worst
+     * of both worlds. {@code CommandTreeBuilder} filters the client's tab-completion list through
+     * {@code AbstractCommand.hasPermission}, whose first line is:
+     *
+     * <pre>
+     * String perm = getPermission();
+     * if (perm == null) return true;                  // no permission =&gt; always visible
+     * if (!sender.hasPermission(perm)) return false;
+     * </pre>
+     *
+     * <p>{@code setPermissionGroup(...)} causes a permission to be generated, so these commands
+     * were hidden from every non-OP player's suggestions — while still being perfectly runnable
+     * if typed in full. Players could use the shop and never discover it existed. That is why
+     * EliteEssentials' commands appear for everyone and ours did not.
+     *
+     * <p>So the player-facing half declares no permission: visible to all, runnable by all,
+     * which is what they already were in practice. The four admin subcommands — grant, revoke,
+     * reconcile, chargeback — keep theirs, because those genuinely must be restricted.
+     */
+    private abstract static class PublicPlayerCommand extends AbstractPlayerCommand {
+        PublicPlayerCommand(String name, String description) {
+            super(name, description);
+        }
+
+        PublicPlayerCommand(String description) {
+            super(description);
+        }
+
+        @Override
+        protected boolean canGeneratePermission() {
+            return false;
+        }
+    }
+
     // --- /supporter status ------------------------------------------------------------------
 
-    public static final class StatusSub extends AbstractPlayerCommand {
+    public static final class StatusSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public StatusSub(SupporterPlugin plugin) {
@@ -147,7 +193,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
     // --- /supporter list --------------------------------------------------------------------
 
-    public static final class ListSub extends AbstractPlayerCommand {
+    public static final class ListSub extends PublicPlayerCommand {
         private static final int LIMIT = 15;
 
         private final SupporterPlugin plugin;
@@ -195,7 +241,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      * <p>GREEDY_STRING so a multi-word title works — but note the variant is selected by token
      * count, so this only works because the greedy argument is the command's sole parameter.
      */
-    public static final class TitleSub extends AbstractPlayerCommand {
+    public static final class TitleSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public TitleSub(SupporterPlugin plugin) {
@@ -237,7 +283,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     }
 
     /** The one-argument form of {@code /supporter title}. */
-    public static final class SetTitleVariant extends AbstractPlayerCommand {
+    public static final class SetTitleVariant extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
         private final Argument textArg;
 
@@ -263,7 +309,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     // --- /supporter colour [hex] --------------------------------------------------------------
 
     /** {@code /supporter colour} clears and lists the options; with an argument, sets. */
-    public static final class ColorSub extends AbstractPlayerCommand {
+    public static final class ColorSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public ColorSub(SupporterPlugin plugin) {
@@ -311,7 +357,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     }
 
     /** The one-argument form of {@code /supporter colour}. */
-    public static final class SetColorVariant extends AbstractPlayerCommand {
+    public static final class SetColorVariant extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
         private final Argument hexArg;
 
@@ -333,7 +379,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     // --- /supporter trail [id] ----------------------------------------------------------------
 
     /** {@code /supporter trail} clears and lists; with an id, sets. */
-    public static final class TrailSub extends AbstractPlayerCommand {
+    public static final class TrailSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public TrailSub(SupporterPlugin plugin) {
@@ -377,7 +423,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     }
 
     /** The one-argument form of {@code /supporter trail}. */
-    public static final class SetTrailVariant extends AbstractPlayerCommand {
+    public static final class SetTrailVariant extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
         private final Argument idArg;
 
@@ -405,7 +451,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      * off. A cosmetic effect that the people who have to look at it cannot switch off is a
      * nuisance rather than a perk — and it is the honest answer to "the server is too busy".
      */
-    public static final class TrailsVisibilitySub extends AbstractPlayerCommand {
+    public static final class TrailsVisibilitySub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
         private final Argument stateArg;
 
@@ -457,7 +503,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      * owns homes on this server and resolves limits through LuckPerms. If those are changed,
      * {@code supporter.json} has to be changed to match or this command lies to players.
      */
-    public static final class PerksSub extends AbstractPlayerCommand {
+    public static final class PerksSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public PerksSub(SupporterPlugin plugin) {
@@ -500,7 +546,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
     // --- /supporter tokens --------------------------------------------------------------------
 
-    public static final class TokensSub extends AbstractPlayerCommand {
+    public static final class TokensSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public TokensSub(SupporterPlugin plugin) {
@@ -528,7 +574,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
     // --- /supporter shop ----------------------------------------------------------------------
 
-    public static final class ShopSub extends AbstractPlayerCommand {
+    public static final class ShopSub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
 
         public ShopSub(SupporterPlugin plugin) {
@@ -566,7 +612,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
     // --- /supporter buy <id> ------------------------------------------------------------------
 
-    public static final class BuySub extends AbstractPlayerCommand {
+    public static final class BuySub extends PublicPlayerCommand {
         private final SupporterPlugin plugin;
         private final Argument idArg;
 
