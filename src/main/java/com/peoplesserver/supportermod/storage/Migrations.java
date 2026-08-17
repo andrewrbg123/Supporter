@@ -76,6 +76,28 @@ final class Migrations {
                 )
                 """,
                 "CREATE INDEX idx_pending_username ON pending_grants(username_lower, claimed_at)"
+            },
+            // --- V2: Phase 2 identity ---------------------------------------------------
+            new String[] {
+                """
+                -- Chat identity: the custom title and chat colour a supporter has chosen.
+                --
+                -- A SEPARATE TABLE from supporters, deliberately. Identity is something the
+                -- player configured, not part of their entitlement arithmetic, and it must
+                -- outlive a lapse: when somebody's rank expires their title stops RENDERING
+                -- but is not deleted, so renewing restores exactly what they had rather than
+                -- making them set it up again. That is the standing rule — never delete
+                -- something a player paid for, freeze it instead.
+                --
+                -- No index: this is only ever read by primary key, on login and on /supporter
+                -- title|colour. The chat path reads the in-memory cache, never this table.
+                CREATE TABLE supporter_identity (
+                    uuid       TEXT PRIMARY KEY,
+                    title      TEXT,
+                    chat_color TEXT,
+                    updated_at INTEGER NOT NULL
+                )
+                """
             });
 
     static void apply(Connection conn) throws SQLException {

@@ -1,5 +1,6 @@
 package com.peoplesserver.supportermod.storage;
 
+import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.SupporterRecord;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -259,6 +260,49 @@ public final class SupporterStorage implements AutoCloseable {
                         "UPDATE pending_grants SET claimed_at = ? WHERE id = ?")) {
             ps.setLong(1, atMs);
             ps.setLong(2, id);
+            ps.executeUpdate();
+        }
+    }
+
+    // --- identity (Phase 2) ---------------------------------------------------------------
+
+    /** Identity for a player, or {@link SupporterIdentity#NONE} if they have never set one. */
+    public synchronized SupporterIdentity findIdentity(UUID uuid) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "SELECT title, chat_color FROM supporter_identity WHERE uuid = ?")) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return SupporterIdentity.NONE;
+                }
+                return new SupporterIdentity(rs.getString("title"), rs.getString("chat_color"));
+            }
+        }
+    }
+
+    /**
+     * Writes a player's identity.
+     *
+     * <p>Upsert rather than insert-or-update-in-two-steps: a player changing their title twice
+     * in quick succession must not be able to race two rows into a table keyed by uuid.
+     */
+    public synchronized void saveIdentity(UUID uuid, SupporterIdentity identity, long atMs)
+            throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        """
+                        INSERT INTO supporter_identity(uuid, title, chat_color, updated_at)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(uuid) DO UPDATE SET
+                            title = excluded.title,
+                            chat_color = excluded.chat_color,
+                            updated_at = excluded.updated_at
+                        """)) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, identity.title());
+            ps.setString(3, identity.chatColor());
+            ps.setLong(4, atMs);
             ps.executeUpdate();
         }
     }

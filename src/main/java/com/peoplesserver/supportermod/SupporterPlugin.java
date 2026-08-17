@@ -1,5 +1,6 @@
 package com.peoplesserver.supportermod;
 
+import com.hypixel.hytale.server.core.event.events.player.PlayerChatEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
@@ -13,6 +14,7 @@ import com.peoplesserver.supportermod.platform.hytale.ExecutorScheduler;
 import com.peoplesserver.supportermod.platform.hytale.HytaleLog;
 import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
+import com.peoplesserver.supportermod.platform.hytale.SupporterChatTag;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
 import java.awt.Color;
 import java.nio.file.Files;
@@ -71,7 +73,8 @@ public final class SupporterPlugin extends JavaPlugin {
             this.config = SupporterConfig.load(dataDir.resolve("supporter.json"));
             this.storage = SupporterStorage.open(dataDir.resolve(config.databaseFile()));
 
-            this.messenger = new HytaleMessenger(tagColor(config));
+            Color tagColor = tagColor(config);
+            this.messenger = new HytaleMessenger(tagColor);
             this.directory = new HytalePlayerDirectory();
             this.service = new SupporterService(
                     storage, config, Clock.systemUTC(), directory, messenger, log);
@@ -82,6 +85,11 @@ public final class SupporterPlugin extends JavaPlugin {
 
             getCommandRegistry().registerCommand(new SupporterCommand(this));
             getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
+
+            // Phase 2. Decorates the chat line by setting a formatter; it never cancels the
+            // event, so FactionMod's faction chat is untouched. See SupporterChatTag.
+            SupporterChatTag chatTag = new SupporterChatTag(service, tagColor);
+            getEventRegistry().registerGlobal(PlayerChatEvent.class, chatTag::onPlayerChat);
 
             log.info("Ready — grace " + config.graceDays() + "d, reconcile at "
                     + config.reconcileHourUtc() + ":00 UTC");

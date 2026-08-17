@@ -70,6 +70,14 @@ public final class SupporterService {
      */
     private final Map<UUID, SupporterRecord> cache = new ConcurrentHashMap<>();
 
+    /**
+     * Chat identity, filled lazily and invalidated on write.
+     *
+     * <p>Separate from {@link #cache} on purpose. Entitlement is time-sensitive and re-checked
+     * on every read; identity is not — a title is a title whether or not the rank is current.
+     */
+    private final Map<UUID, SupporterIdentity> identityCache = new ConcurrentHashMap<>();
+
     public SupporterService(
             SupporterStorage storage,
             SupporterConfig config,
@@ -176,6 +184,125 @@ public final class SupporterService {
             }
         }
         return Collections.unmodifiableList(out);
+    }
+
+    // --- identity (Phase 2) -----------------------------------------------------------------
+
+    /**
+     * A player's chat identity, cached.
+     *
+     * <p>Cached because the chat formatter calls this for every message a supporter sends. A
+     * database read per chat line would put SQLite on the hot path, which is precisely what the
+     * entitlement cache exists to avoid. Filled lazily on the player's first message, so a
+     * quiet session costs nothing, and invalidated on every write.
+     *
+     * <p>Deliberately NOT gated on entitlement: a lapsed supporter's title is still returned
+     * here. Whether it renders is the chat layer's decision, and keeping the two separate means
+     * renewing restores what they had rather than silently discarding it.
+     */
+    public SupporterIdentity identity(UUID uuid) {
+        if (uuid == null) {
+            return SupporterIdentity.NONE;
+        }
+        SupporterIdentity cached = identityCache.get(uuid);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            SupporterIdentity loaded = storage.findIdentity(uuid);
+            identityCache.put(uuid, loaded);
+            return loaded;
+        } catch (SQLException e) {
+            // Chat must not break because a title could not be read.
+            log.error("Failed to read identity for " + uuid, e);
+            return SupporterIdentity.NONE;
+        }
+    }
+
+    /**
+     * Sets or clears a custom title. Null or blank clears it.
+     *
+     * @throws IllegalArgumentException with a player-readable reason if the title is rejected
+     */
+    public synchronized SupporterIdentity setTitle(UUID uuid, String title) {
+        String clean = validateTitle(title);
+        return writeIdentity(uuid, identity(uuid).withTitle(clean), "TITLE",
+                clean == null ? "cleared" : clean);
+    }
+
+    /**
+     * Sets or clears the chat colour. Null or blank clears it.
+     *
+     * @throws IllegalArgumentException with a player-readable reason if the colour is not on
+     *     the allowed list
+     */
+    public synchronized SupporterIdentity setChatColor(UUID uuid, String color) {
+        String clean = validateColor(color);
+        return writeIdentity(uuid, identity(uuid).withColor(clean), "COLOUR",
+                clean == null ? "cleared" : clean);
+    }
+
+    private SupporterIdentity writeIdentity(
+            UUID uuid, SupporterIdentity updated, String action, String detail) {
+        Objects.requireNonNull(uuid, "uuid");
+        long now = clock.millis();
+        try {
+            storage.transact(() -> {
+                storage.saveIdentity(uuid, updated, now);
+                storage.log(uuid, directory.usernameFor(uuid).orElse(null),
+                        action, detail, "player", now);
+                return null;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Failed to save identity for " + uuid, e);
+        }
+        identityCache.put(uuid, updated);
+        return updated;
+    }
+
+    /** @return the cleaned title, or null to clear */
+    private String validateTitle(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String clean = raw.trim();
+
+        // Control characters would let a title break the chat line it sits in.
+        for (int i = 0; i < clean.length(); i++) {
+            char c = clean.charAt(i);
+            if (Character.isISOControl(c)) {
+                throw new IllegalArgumentException("Titles cannot contain control characters.");
+            }
+        }
+        if (clean.length() > config.maxTitleLength()) {
+            throw new IllegalArgumentException("Titles are limited to "
+                    + config.maxTitleLength() + " characters — yours is " + clean.length() + ".");
+        }
+        String lower = clean.toLowerCase(Locale.ROOT);
+        for (String banned : config.titleBlocklist()) {
+            if (banned != null && !banned.isBlank()
+                    && lower.contains(banned.toLowerCase(Locale.ROOT))) {
+                // Deliberately does not echo which word matched: that turns the blocklist into
+                // an oracle somebody can probe for the full list.
+                throw new IllegalArgumentException("That title is not allowed.");
+            }
+        }
+        return clean;
+    }
+
+    /** @return the colour in its configured casing, or null to clear */
+    private String validateColor(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String wanted = raw.trim();
+        for (String allowed : config.allowedChatColors()) {
+            if (allowed.equalsIgnoreCase(wanted)) {
+                return allowed;   // normalise to the configured spelling
+            }
+        }
+        throw new IllegalArgumentException("Not an available colour. Choose from: "
+                + String.join(", ", config.allowedChatColors()));
     }
 
     // --- writes ---------------------------------------------------------------------------

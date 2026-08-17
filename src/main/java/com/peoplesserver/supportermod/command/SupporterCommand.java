@@ -15,6 +15,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.peoplesserver.supportermod.SupporterPlugin;
 import com.peoplesserver.supportermod.core.GrantResult;
+import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.ReconcileReport;
 import com.peoplesserver.supportermod.core.SupporterRecord;
 import com.peoplesserver.supportermod.core.SupporterService;
@@ -57,6 +58,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         this.plugin = plugin;
         addSubCommand(new StatusSub(plugin));
         addSubCommand(new ListSub(plugin));
+        addSubCommand(new TitleSub(plugin));
+        addSubCommand(new ColorSub(plugin));
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
         addSubCommand(new ReconcileSub(plugin));
@@ -166,6 +169,154 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             if (all.size() > shown) {
                 info(ctx, "  ... and " + (all.size() - shown) + " more.");
             }
+        }
+    }
+
+    // --- /supporter title [text] --------------------------------------------------------------
+
+    /**
+     * {@code /supporter title} clears; {@code /supporter title <text>} sets.
+     *
+     * <p>The bare form and the one-argument form are two commands, not one command with an
+     * optional argument, because {@code withOptionalArg} registers a named flag
+     * ({@code [--text=?]}) and rejects a bare positional word. {@code addUsageVariant}
+     * dispatches on required-argument count, which is the supported way to do this.
+     *
+     * <p>GREEDY_STRING so a multi-word title works — but note the variant is selected by token
+     * count, so this only works because the greedy argument is the command's sole parameter.
+     */
+    public static final class TitleSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public TitleSub(SupporterPlugin plugin) {
+            super("title", "Clear your chat title. Use /supporter title <text> to set one.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            addUsageVariant(new SetTitleVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            apply(plugin, ctx, player.getUuid(), null);
+        }
+
+        static void apply(SupporterPlugin plugin, CommandContext ctx, UUID uuid, String title) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "Chat titles are a supporter perk. /supporter to find out more.");
+                return;
+            }
+            try {
+                SupporterIdentity updated = service.setTitle(uuid, title);
+                if (updated.hasTitle()) {
+                    ok(ctx, "Title set to: " + updated.title());
+                } else {
+                    ok(ctx, "Title cleared.");
+                }
+            } catch (IllegalArgumentException e) {
+                err(ctx, e.getMessage());
+            } catch (RuntimeException e) {
+                err(ctx, "Could not save your title: " + e.getMessage());
+                plugin.log().error("setTitle failed for " + uuid, e);
+            }
+        }
+    }
+
+    /** The one-argument form of {@code /supporter title}. */
+    public static final class SetTitleVariant extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument textArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public SetTitleVariant(SupporterPlugin plugin) {
+            super("Set your chat title.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.textArg = withRequiredArg("text", "your title",
+                    (ArgumentType) ArgTypes.GREEDY_STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            // GREEDY_STRING keeps trailing whitespace; the service trims, but trim here too so
+            // the length check sees what the player actually typed.
+            TitleSub.apply(plugin, ctx, player.getUuid(),
+                    String.valueOf(ctx.get(textArg)).trim());
+        }
+    }
+
+    // --- /supporter colour [hex] --------------------------------------------------------------
+
+    /** {@code /supporter colour} clears and lists the options; with an argument, sets. */
+    public static final class ColorSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public ColorSub(SupporterPlugin plugin) {
+            super("colour", "Clear your chat colour. Use /supporter colour <hex> to set one.");
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"color"});
+            this.plugin = plugin;
+            addUsageVariant(new SetColorVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            apply(plugin, ctx, player.getUuid(), null);
+            info(ctx, "Available: " + String.join(", ", plugin.config().allowedChatColors()));
+        }
+
+        static void apply(SupporterPlugin plugin, CommandContext ctx, UUID uuid, String color) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "Chat colours are a supporter perk. /supporter to find out more.");
+                return;
+            }
+            try {
+                SupporterIdentity updated = service.setChatColor(uuid, color);
+                if (updated.hasColor()) {
+                    ok(ctx, "Chat colour set to " + updated.chatColor() + ".");
+                } else {
+                    ok(ctx, "Chat colour cleared.");
+                }
+            } catch (IllegalArgumentException e) {
+                err(ctx, e.getMessage());
+            } catch (RuntimeException e) {
+                err(ctx, "Could not save your colour: " + e.getMessage());
+                plugin.log().error("setChatColor failed for " + uuid, e);
+            }
+        }
+    }
+
+    /** The one-argument form of {@code /supporter colour}. */
+    public static final class SetColorVariant extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument hexArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public SetColorVariant(SupporterPlugin plugin) {
+            super("Set your chat colour to one of the allowed values.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.hexArg = withRequiredArg("hex", "e.g. #55FFFF", (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            ColorSub.apply(plugin, ctx, player.getUuid(), String.valueOf(ctx.get(hexArg)).trim());
         }
     }
 
