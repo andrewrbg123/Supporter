@@ -508,3 +508,224 @@ clearly buildable — the nameplate is the doubtful half. Needs the server jar. 
 chat-only, say so in the command's help text as the prompt already plans.
 
 **R1 — tab list: UNPROVEN, leaning negative.** No such API is referenced anywhere.
+
+---
+
+# Phase 0b — answered from the server jar
+
+Everything in this section is `javap` output from the **live** `HytaleServer.jar`
+(md5 `cb42e8cd4137b0a62873797ab816e79e`, byte-identical to the jar FactionMod compiles
+against, so these are the signatures actually running on The People's Server).
+
+This closes every open question in HANDOFF §5 except 5.6, which is a runtime question and
+cannot be settled from a jar. **Two of the three negative store-page verdicts flip.**
+
+The general lesson: the earlier "leaning negative" calls were all inferred from *FactionMod not
+using an API*. That is not evidence the API is absent — and in two cases it was simply wrong.
+
+## 5.1 — `PlayerChatEvent` cancellation · ANSWERED, and it changes the design
+
+```java
+public class PlayerChatEvent implements IAsyncEvent<String>, ICancellable {
+  public PlayerRef getSender();          public void setSender(PlayerRef);
+  public List<PlayerRef> getTargets();   public void setTargets(List<PlayerRef>);
+  public String getContent();            public void setContent(String);
+  public Formatter getFormatter();       public void setFormatter(Formatter);
+  public boolean isCancelled();          public void setCancelled(boolean);
+  public static final Formatter DEFAULT_FORMATTER;
+}
+
+public interface PlayerChatEvent.Formatter {
+    Message format(PlayerRef sender, String content);
+}
+```
+
+`isCancelled()` is public, so the guard §5.1 asked for exists. But the better answer is that
+**SupporterMod must never cancel and re-broadcast at all.** It sets a `Formatter`:
+
+```java
+e.setFormatter((sender, content) -> Message.join(new Message[]{
+        Message.raw("[Supporter] ").color(tagColor),
+        Message.raw(sender.getUsername() + ": " + content)}));
+```
+
+The server keeps ownership of delivery, so the faction-chat leak §5.1 was worried about cannot
+occur: if FactionMod cancels for faction-chat mode, the formatter is never applied and
+SupporterMod re-broadcasts nothing. Keep `if (e.isCancelled()) return;` as a cheap guard, but the
+safety comes from not owning delivery in the first place.
+
+`setTargets` also exists, which is what a future private-message perk would use.
+
+## 5.2 — Connection-stage hook (R3) · POSITIVE. The premise was wrong
+
+The recon above concluded there was no pre-world hook because FactionMod only uses
+`PlayerReadyEvent`. The server ships six connection events; FactionMod just ignores them:
+
+```
+PlayerSetupConnectEvent      PlayerConnectEvent        AddPlayerToWorldEvent
+PlayerSetupDisconnectEvent   PlayerDisconnectEvent     RemovedPlayerFromWorldEvent
+```
+
+`PlayerSetupConnectEvent` is the one that matters:
+
+```java
+public class PlayerSetupConnectEvent implements IEvent<Void>, ICancellable {
+  public static final Message DEFAULT_REASON;
+  private final PacketHandler packetHandler;
+  private final String username;
+  private final UUID uuid;
+  private final PlayerAuthentication auth;
+  private final byte[] referralData;
+  private final HostAddress referralSource;
+  private boolean cancelled;
+  private Message reason;
+}
+```
+
+Cancellable, at authentication stage, **with a rejection `Message`**, and the UUID is already
+known — so entitlement can be checked before the connection is accepted.
+
+**Perk 10 (priority queue) is buildable.** Take it off the "do not list" pile.
+
+## 5.3 — Player cap readable at runtime (C9) · POSITIVE
+
+```java
+HytaleServerConfig.getMaxPlayers()   // and setMaxPlayers(int)
+Universe.getPlayerCount()
+```
+
+Both present, so reserved slots work as the fallback — or as the mechanism itself.
+
+## 5.4 — Server-side display name (R4) · NEGATIVE for the nameplate
+
+`PlayerRef` has exactly one name member:
+
+```java
+private final String username;
+public String getUsername();
+```
+
+`final`, no setter, no display-name concept anywhere on the class. **The nameplate cannot be
+changed server-side.** A chat-only `/nick` is buildable via the `Formatter` above.
+
+**Perk 11 stays off the store page as written.** If it ships, the help text and the store
+listing must both say "chat only — your nameplate does not change".
+
+## 5.5 — Tab list (R1) · POSITIVE, with a real caveat
+
+There is a full server player list. FactionMod simply never touches it:
+
+```
+com/hypixel/hytale/server/core/modules/serverplayerlist/ServerPlayerListModule
+protocol/packets/interface_/AddToServerPlayerList
+protocol/packets/interface_/RemoveFromServerPlayerList
+protocol/packets/interface_/UpdateServerPlayerList
+protocol/packets/interface_/ServerPlayerListUpdate
+protocol/packets/interface_/UpdateServerPlayerListPing
+protocol/packets/interface_/ServerPlayerListPlayer
+```
+
+The entry is plain mutable data:
+
+```java
+public class ServerPlayerListPlayer {
+  public UUID uuid;  public String username;  public UUID worldUuid;  public int ping;
+  public ServerPlayerListPlayer(UUID, String, UUID, int);
+}
+```
+
+`username` is a public `String`, so a decorated name can be sent.
+
+**The caveat is ownership.** `ServerPlayerListModule` is itself a `JavaPlugin` with a
+`get()` singleton, and it rebuilds entries from a *private* `createServerPlayerListPlayer(PlayerRef)`
+on `PlayerConnectEvent`, `PlayerDisconnectEvent`, `AddPlayerToWorldEvent` and a recurring
+`broadcastPingUpdates()`. Anything SupporterMod writes is overwritten on the next tick of that
+timer. Decoration therefore means re-applying after every one of those triggers — racing a
+module we do not control.
+
+**Verdict: possible, not free.** Treat it as a Phase 6 item with a spike first, and do not
+promise it on the store page until the spike holds up under a ping update.
+
+## 5.5b — Offline username → UUID · NEGATIVE
+
+```java
+public interface PlayerStorage {
+  CompletableFuture<Holder<EntityStore>> load(UUID);
+  CompletableFuture<Void> save(UUID, Holder<EntityStore>, boolean);
+  CompletableFuture<Void> update(UUID, Consumer<Holder<EntityStore>>);
+  CompletableFuture<Void> remove(UUID);
+  Set<UUID> getPlayers() throws IOException;
+}
+```
+
+Everything is keyed by UUID and there is no username index — `getPlayers()` returns UUIDs only.
+Resolving a name offline would mean loading every player Holder and comparing, which is not
+viable on a join path.
+
+**`pending_grants` stays the main path, exactly as designed.** `Universe.getPlayerByUsername`
+remains online-only and is the fast path when the player happens to be connected.
+
+## 5.6 — SQLite · the server provides nothing
+
+No `sqlite`, `jdbc`, `h2` or `hsqldb` classes anywhere in the server jar. So `sqlite-jdbc` must
+be shaded into the plugin jar (the `pluginJar` task already does this) and **nothing on the
+classpath conflicts with it**.
+
+Whether the native library can unpack at runtime is still untested **on the server** and still
+the first thing to check there. Note the server runs in a Docker container (`yolks:java_25`)
+with the data directory at `/home/container` — if `java.io.tmpdir` is not writable, set
+`org.sqlite.tmpdir` to a path under the plugin's own directory rather than abandoning SQLite.
+
+One data point from the build machine: the driver does load, and it announces itself:
+
+```
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by org.sqlite.SQLiteJDBCLoader
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+```
+
+That is `System.load` of the unpacked native library — the exact call §5.6 is about. Two things
+follow. On boot, **these three lines in the server log mean SQLite is working**, not failing.
+And the last line is a real forward risk: a future JDK blocks restricted native access unless
+the JVM is started with `--enable-native-access=ALL-UNNAMED`. The server's startup command is
+edited in the Pelican panel's Startup tab, so if a JDK upgrade ever breaks SQLite, that flag is
+the fix rather than a rewrite of the storage layer.
+
+## Scheduler · confirmed absent, but there is a lifecycle hook
+
+There is no API that *creates* scheduled work. The `Scheduler` port stays, backed by
+`ScheduledExecutorService`, and — per §B7 — every callback must hop to the world thread with
+`world.execute(...)` before touching entities or components.
+
+There is, however, a registry for *tracking* work you created yourself:
+
+```java
+public class TaskRegistry extends Registry<TaskRegistration> {
+  public TaskRegistration registerTask(CompletableFuture<Void>);
+  public TaskRegistration registerTask(ScheduledFuture<Void>);
+}
+```
+
+Reached via `getTaskRegistry()`. Handing our `ScheduledFuture` to it means the host cancels the
+reconcile job during shutdown rather than us relying on our own teardown running — worth using,
+given FactionMod's v1.19.8 bug where a deferred shutdown task never ran because the world thread
+was already winding down.
+
+## Plugin lifecycle · confirmed
+
+`PluginBase` (which `JavaPlugin` extends) exposes `protected void setup()` and
+`protected void shutdown()`, plus `getDataDirectory()` — an official data directory, so the
+`Path.of("plugins", "<Name>")` convention in §7.2 is FactionMod's own choice rather than a
+requirement.
+
+`PlayerEvent.getPlayerRef()` returns a `Ref<EntityStore>`, **not** a `PlayerRef`. The player
+identity comes from `event.getPlayer().getPlayerRef()`, which does return `PlayerRef` and hence
+`getUuid()` / `getUsername()`.
+
+## Revised store-page verdicts
+
+| Perk | Was | Now |
+|---|---|---|
+| 10 — priority queue | UNPROVEN, do not list | **Buildable** — `PlayerSetupConnectEvent` is cancellable with a reason |
+| 11 — `/nick` nameplate | UNPROVEN, leaning negative | **Confirmed negative** — chat-only, and say so |
+| R1 — tab list | UNPROVEN, leaning negative | **Possible**, but races `ServerPlayerListModule`; spike before promising |
