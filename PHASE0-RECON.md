@@ -758,6 +758,36 @@ requirement.
 identity comes from `event.getPlayer().getPlayerRef()`, which does return `PlayerRef` and hence
 `getUuid()` / `getUsername()`.
 
+## Particle systems: 540 of 598 never expire
+
+Settled by deploying Phase 4, 2026-08-17. A trail spawned free-standing must use an effect that
+expires on its own, and **most vanilla effects do not**:
+
+```
+total particlesystems : 598
+no LifeSpan (unsafe)  : 540
+finite LifeSpan       :  49  (<= 6s)
+```
+
+A `.particlesystem` with no top-level `LifeSpan` is meant to be attached to something with its
+own lifetime — a projectile, a held torch, a status effect on an entity. Spawned at a world
+position with `ParticleUtil.spawnParticleEffect`, it simply stays there. Picking six by
+plausible name (`Fire_Teal`, `Dust_Sparkles_Fine`, `Block_Gem_Sparks`…) put six of the 540 into
+production and left the world carpeted in glowing blobs.
+
+**Before using any effect free-standing, check it expires:**
+
+```
+unzip -p Assets.zip Server/Particles/<path>.particlesystem | grep LifeSpan
+```
+
+No `LifeSpan` line means do not use it. Also prefer few `SpawnerId` entries — a seven-spawner
+explosion costs seven times a one-spawner puff, and a trail emits continuously.
+
+Note names are not unique: `Fire_Charge1` exists at both `Combat/Fire_Stick/` and `_Test/Fire/`.
+`tools/` has a scanner for this (`ScanParticles`), and the shortlist worth drawing from is the
+`Potion_*_Burst` family, `Block_Hit_*`, and `Potion_Health_Implosion`.
+
 ## Revised store-page verdicts
 
 | Perk | Was | Now |

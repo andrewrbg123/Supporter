@@ -237,15 +237,35 @@ public final class SupporterConfig {
         defaultTrails().forEach(trails::putIfAbsent);
     }
 
-    /** Stock Hytale particle effects, chosen to be visually distinct from one another. */
+    /**
+     * Stock Hytale particle effects usable as a trail.
+     *
+     * <p><b>Every effect here must declare a finite {@code LifeSpan}, and that is not a
+     * stylistic preference.</b> Of the 598 particle systems the server ships, <b>540 have no
+     * {@code LifeSpan} at all</b> — they are designed to be attached to something persistent
+     * like a projectile or a torch, and spawned free-standing they never expire. The first
+     * version of this list picked six of those by name, and the live server ended up carpeted
+     * in glowing blobs that stayed put.
+     *
+     * <p>So before adding a trail, check the effect actually expires:
+     *
+     * <pre>
+     * unzip -p Assets.zip Server/Particles/&lt;path&gt;.particlesystem | grep LifeSpan
+     * </pre>
+     *
+     * <p>No {@code LifeSpan} line means do not use it. Prefer few {@code SpawnerId} entries too
+     * — this is emitted continuously, so a seven-spawner explosion costs seven times a
+     * one-spawner puff.
+     */
     static Map<String, String> defaultTrails() {
         Map<String, String> out = new LinkedHashMap<>();
-        out.put("sparkle", "Dust_Sparkles_Fine");
-        out.put("ember", "Fire_Charge1");
-        out.put("teal", "Fire_Teal");
-        out.put("green", "Fire_Green");
-        out.put("blue", "Fire_Blue");
-        out.put("gem", "Block_Gem_Sparks");
+        // name              effect                      life   spawners
+        out.put("sparkle", "Potion_Signature_Burst");  // 0.6s   1
+        out.put("gold", "Potion_Stamina_Burst");       // 2.0s   1
+        out.put("heal", "Potion_Health_Implosion");    // 2.0s   2
+        out.put("morph", "Potion_Morph_Burst");        // 2.0s   2
+        out.put("snow", "Block_Hit_Snow");             // 0.17s  2
+        out.put("dust", "Block_Hit_Mud");              // 0.17s  2
         return out;
     }
 }
