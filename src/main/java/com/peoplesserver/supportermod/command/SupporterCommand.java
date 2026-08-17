@@ -60,6 +60,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new ListSub(plugin));
         addSubCommand(new TitleSub(plugin));
         addSubCommand(new ColorSub(plugin));
+        addSubCommand(new TrailSub(plugin));
+        addSubCommand(new TrailsVisibilitySub(plugin));
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
         addSubCommand(new ReconcileSub(plugin));
@@ -317,6 +319,120 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                                PlayerRef player, World world) {
             ColorSub.apply(plugin, ctx, player.getUuid(), String.valueOf(ctx.get(hexArg)).trim());
+        }
+    }
+
+    // --- /supporter trail [id] ----------------------------------------------------------------
+
+    /** {@code /supporter trail} clears and lists; with an id, sets. */
+    public static final class TrailSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public TrailSub(SupporterPlugin plugin) {
+            super("trail", "Clear your trail. Use /supporter trail <name> to pick one.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            addUsageVariant(new SetTrailVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            apply(plugin, ctx, player.getUuid(), null);
+            info(ctx, "Available: " + String.join(", ", plugin.config().trails().keySet()));
+        }
+
+        static void apply(SupporterPlugin plugin, CommandContext ctx, UUID uuid, String trail) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "Trails are a supporter perk. /supporter to find out more.");
+                return;
+            }
+            try {
+                SupporterIdentity updated = service.setTrail(uuid, trail);
+                if (updated.hasTrail()) {
+                    ok(ctx, "Trail set to " + updated.trail() + ". Walk around to see it.");
+                } else {
+                    ok(ctx, "Trail cleared.");
+                }
+            } catch (IllegalArgumentException e) {
+                err(ctx, e.getMessage());
+            } catch (RuntimeException e) {
+                err(ctx, "Could not save your trail: " + e.getMessage());
+                plugin.log().error("setTrail failed for " + uuid, e);
+            }
+        }
+    }
+
+    /** The one-argument form of {@code /supporter trail}. */
+    public static final class SetTrailVariant extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument idArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public SetTrailVariant(SupporterPlugin plugin) {
+            super("Choose a particle trail.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.idArg = withRequiredArg("trail", "trail name", (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            TrailSub.apply(plugin, ctx, player.getUuid(), String.valueOf(ctx.get(idArg)).trim());
+        }
+    }
+
+    // --- /supporter trails <on|off> -----------------------------------------------------------
+
+    /**
+     * Hides or shows other people's trails.
+     *
+     * <p><b>Not a supporter perk, deliberately.</b> Anyone may turn other players' particles
+     * off. A cosmetic effect that the people who have to look at it cannot switch off is a
+     * nuisance rather than a perk — and it is the honest answer to "the server is too busy".
+     */
+    public static final class TrailsVisibilitySub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument stateArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public TrailsVisibilitySub(SupporterPlugin plugin) {
+            super("trails", "Show or hide other players' trails: <on|off>");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.stateArg = withRequiredArg("state", "on or off", (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            String state = String.valueOf(ctx.get(stateArg)).trim().toLowerCase();
+            boolean show;
+            if (state.equals("on") || state.equals("show")) {
+                show = true;
+            } else if (state.equals("off") || state.equals("hide")) {
+                show = false;
+            } else {
+                err(ctx, "Use /supporter trails on or /supporter trails off.");
+                return;
+            }
+            try {
+                service.setHideTrails(player.getUuid(), !show);
+                ok(ctx, show ? "Other players' trails are now visible."
+                        : "Other players' trails are now hidden for you.");
+            } catch (RuntimeException e) {
+                err(ctx, "Could not save that: " + e.getMessage());
+                plugin.log().error("setHideTrails failed", e);
+            }
         }
     }
 

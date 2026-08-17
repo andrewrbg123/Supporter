@@ -98,6 +98,17 @@ final class Migrations {
                     updated_at INTEGER NOT NULL
                 )
                 """
+            },
+            // --- V3: Phase 4 trails ------------------------------------------------------
+            new String[] {
+                // The chosen trail, by config id rather than by particle effect name — so an
+                // admin can repoint "ember" at a different effect without rewriting rows.
+                "ALTER TABLE supporter_identity ADD COLUMN trail TEXT",
+                // Whether this player wants OTHER people's trails hidden. Not a supporter
+                // perk: anybody may opt out, which is why it lives on the same row rather
+                // than being inferred from entitlement. A player who has never been a
+                // supporter simply gets a row with only this column set.
+                "ALTER TABLE supporter_identity ADD COLUMN hide_trails INTEGER NOT NULL DEFAULT 0"
             });
 
     static void apply(Connection conn) throws SQLException {

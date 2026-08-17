@@ -16,6 +16,7 @@ import com.peoplesserver.supportermod.platform.hytale.HytaleLog;
 import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
 import com.peoplesserver.supportermod.platform.hytale.SupporterChatTag;
+import com.peoplesserver.supportermod.platform.hytale.TrailSystem;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
 import java.awt.Color;
 import java.nio.file.Files;
@@ -51,6 +52,7 @@ public final class SupporterPlugin extends JavaPlugin {
     private HytalePlayerDirectory directory;
     private ExecutorScheduler scheduler;
     private Scheduler.Task reconcileTask;
+    private Scheduler.Task trailTask;
 
     /** Non-null when setup failed; reported by every command so it cannot go unnoticed. */
     private volatile String startupError;
@@ -98,8 +100,16 @@ public final class SupporterPlugin extends JavaPlugin {
             getEventRegistry().registerGlobal(
                     EventPriority.LAST, PlayerChatEvent.class, chatTag::onPlayerChat);
 
+            // Phase 4. Runs continuously rather than on demand, so the guards inside
+            // TrailSystem are what keep it affordable — see that class.
+            TrailSystem trails = new TrailSystem(service, config, log);
+            long trailMs = Math.max(50L, config.trailIntervalTicks() * 50L);
+            this.trailTask = scheduler.scheduleRepeating(trails::tick, trailMs, trailMs);
+
             log.info("Ready — grace " + config.graceDays() + "d, reconcile at "
-                    + config.reconcileHourUtc() + ":00 UTC");
+                    + config.reconcileHourUtc() + ":00 UTC, trails every " + trailMs + "ms "
+                    + "(cap " + config.maxConcurrentTrails() + "/tick, "
+                    + config.trailViewDistance() + " block view)");
         } catch (Throwable t) {
             // Catch Throwable, not Exception: a missing native library surfaces as
             // UnsatisfiedLinkError, which is exactly the failure mode Phase 0b flagged.
@@ -120,6 +130,14 @@ public final class SupporterPlugin extends JavaPlugin {
     }
 
     private void closeQuietly() {
+        if (trailTask != null) {
+            try {
+                trailTask.cancel();
+            } catch (Throwable ignored) {
+                // shutting down anyway
+            }
+            trailTask = null;
+        }
         if (reconcileTask != null) {
             try {
                 reconcileTask.cancel();

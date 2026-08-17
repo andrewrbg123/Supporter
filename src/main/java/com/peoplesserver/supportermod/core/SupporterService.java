@@ -242,6 +242,44 @@ public final class SupporterService {
                 clean == null ? "cleared" : clean);
     }
 
+    /**
+     * Sets or clears the particle trail. Null or blank clears it.
+     *
+     * @throws IllegalArgumentException with a player-readable reason if the id is not configured
+     */
+    public synchronized SupporterIdentity setTrail(UUID uuid, String trailId) {
+        String clean = validateTrail(trailId);
+        return writeIdentity(uuid, identity(uuid).withTrail(clean), "TRAIL",
+                clean == null ? "cleared" : clean);
+    }
+
+    /**
+     * Sets whether this player wants other people's trails hidden.
+     *
+     * <p>Not gated on entitlement — anybody may turn other players' particles off. A cosmetic
+     * perk that cannot be switched off by the people who have to look at it is a nuisance, not
+     * a perk.
+     */
+    public synchronized SupporterIdentity setHideTrails(UUID uuid, boolean hide) {
+        return writeIdentity(uuid, identity(uuid).withHideTrails(hide), "TRAIL_VISIBILITY",
+                hide ? "hidden" : "shown");
+    }
+
+    /** @return the trail id in its configured spelling, or null to clear */
+    private String validateTrail(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String wanted = raw.trim();
+        for (String id : config.trails().keySet()) {
+            if (id.equalsIgnoreCase(wanted)) {
+                return id;
+            }
+        }
+        throw new IllegalArgumentException("No such trail. Available: "
+                + String.join(", ", config.trails().keySet()));
+    }
+
     private SupporterIdentity writeIdentity(
             UUID uuid, SupporterIdentity updated, String action, String detail) {
         Objects.requireNonNull(uuid, "uuid");

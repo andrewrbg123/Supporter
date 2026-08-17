@@ -270,13 +270,20 @@ public final class SupporterStorage implements AutoCloseable {
     public synchronized SupporterIdentity findIdentity(UUID uuid) throws SQLException {
         try (PreparedStatement ps =
                 conn().prepareStatement(
-                        "SELECT title, chat_color FROM supporter_identity WHERE uuid = ?")) {
+                        """
+                        SELECT title, chat_color, trail, hide_trails
+                        FROM supporter_identity WHERE uuid = ?
+                        """)) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
                     return SupporterIdentity.NONE;
                 }
-                return new SupporterIdentity(rs.getString("title"), rs.getString("chat_color"));
+                return new SupporterIdentity(
+                        rs.getString("title"),
+                        rs.getString("chat_color"),
+                        rs.getString("trail"),
+                        rs.getInt("hide_trails") != 0);
             }
         }
     }
@@ -292,17 +299,22 @@ public final class SupporterStorage implements AutoCloseable {
         try (PreparedStatement ps =
                 conn().prepareStatement(
                         """
-                        INSERT INTO supporter_identity(uuid, title, chat_color, updated_at)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO supporter_identity
+                            (uuid, title, chat_color, trail, hide_trails, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
                         ON CONFLICT(uuid) DO UPDATE SET
                             title = excluded.title,
                             chat_color = excluded.chat_color,
+                            trail = excluded.trail,
+                            hide_trails = excluded.hide_trails,
                             updated_at = excluded.updated_at
                         """)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, identity.title());
             ps.setString(3, identity.chatColor());
-            ps.setLong(4, atMs);
+            ps.setString(4, identity.trail());
+            ps.setInt(5, identity.hideTrails() ? 1 : 0);
+            ps.setLong(6, atMs);
             ps.executeUpdate();
         }
     }

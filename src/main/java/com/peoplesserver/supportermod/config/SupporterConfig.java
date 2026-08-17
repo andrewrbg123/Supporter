@@ -6,7 +6,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Contents of {@code supporter.json}.
@@ -42,6 +45,33 @@ public final class SupporterConfig {
     // --- Phase 4: trails ------------------------------------------------------------------
     private int trailIntervalTicks = 8;
     private int maxConcurrentTrails = 40;
+
+    /**
+     * Trail id → the particle effect the server spawns for it.
+     *
+     * <p>Deliberately configuration rather than code. These are stock Hytale effects (598 of
+     * them ship with the server), so no custom art has to be authored and no asset pack has to
+     * be bundled — and if one turns out to look wrong or cost too much, it is swapped here
+     * without a rebuild.
+     */
+    private Map<String, String> trails = defaultTrails();
+
+    /**
+     * How far away a trail is visible, in blocks.
+     *
+     * <p>The particle is sent only to players inside this radius. FactionMod uses 64 for its
+     * claim borders; trails are smaller and far more frequent, so this is tighter.
+     */
+    private int trailViewDistance = 40;
+
+    /**
+     * How far a player must move since the last emit before another particle is spawned.
+     *
+     * <p>This is the single most important performance control here. Without it a stationary
+     * supporter emits a particle every tick forever, which is both ugly and pure waste — and
+     * with a whole server standing in spawn it multiplies.
+     */
+    private double trailMinMoveDistance = 0.9;
 
     // --- Phase 5: tokens ------------------------------------------------------------------
     private int tokensPerMonth = 100;
@@ -99,6 +129,19 @@ public final class SupporterConfig {
 
     public int supporterHomeCooldownSec() {
         return supporterHomeCooldownSec;
+    }
+
+    /** Unmodifiable view: trail id → particle effect name. */
+    public Map<String, String> trails() {
+        return trails == null ? Map.of() : Collections.unmodifiableMap(trails);
+    }
+
+    public int trailViewDistance() {
+        return trailViewDistance;
+    }
+
+    public double trailMinMoveDistance() {
+        return trailMinMoveDistance;
     }
 
     public int trailIntervalTicks() {
@@ -166,5 +209,43 @@ public final class SupporterConfig {
         if (databaseFile == null || databaseFile.isBlank()) {
             throw new IllegalStateException("databaseFile must be set");
         }
+        if (trailIntervalTicks < 1) {
+            throw new IllegalStateException(
+                    "trailIntervalTicks must be >= 1, got " + trailIntervalTicks);
+        }
+        backfillTrails();
+    }
+
+    /**
+     * Adds any trail this build knows about that the live config has not seen yet.
+     *
+     * <p><b>Per key, not "if the whole map is empty".</b> A live {@code supporter.json} that
+     * already lists three trails would never receive a fourth under a whole-map guard — the map
+     * is not empty, so the guard skips, and the new trail silently does not exist on the one
+     * server that matters. The same mistake has already been made once on this server in the
+     * Jobs plugin.
+     *
+     * <p>An admin who deliberately renames or removes a trail keeps their change: only ids that
+     * are absent are added back.
+     */
+    private void backfillTrails() {
+        if (trails == null) {
+            trails = new LinkedHashMap<>();
+        } else {
+            trails = new LinkedHashMap<>(trails);
+        }
+        defaultTrails().forEach(trails::putIfAbsent);
+    }
+
+    /** Stock Hytale particle effects, chosen to be visually distinct from one another. */
+    static Map<String, String> defaultTrails() {
+        Map<String, String> out = new LinkedHashMap<>();
+        out.put("sparkle", "Dust_Sparkles_Fine");
+        out.put("ember", "Fire_Charge1");
+        out.put("teal", "Fire_Teal");
+        out.put("green", "Fire_Green");
+        out.put("blue", "Fire_Blue");
+        out.put("gem", "Block_Gem_Sparks");
+        return out;
     }
 }

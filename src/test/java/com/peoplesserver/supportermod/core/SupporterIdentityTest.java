@@ -153,6 +153,86 @@ class SupporterIdentityTest {
                 "title must be kept so renewing restores it — never delete what was paid for");
     }
 
+    // --- Phase 4: trails --------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a trail is selected by its configured id")
+    void setsTrail() {
+        String id = config.trails().keySet().iterator().next();
+        service.setTrail(ALICE, id);
+        assertEquals(id, service.identity(ALICE).trail());
+        assertTrue(service.identity(ALICE).hasTrail());
+    }
+
+    @Test
+    @DisplayName("an unknown trail id is rejected and lists the real ones")
+    void rejectsUnknownTrail() {
+        IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class, () -> service.setTrail(ALICE, "definitely-not-a-trail"));
+        assertTrue(e.getMessage().contains(config.trails().keySet().iterator().next()));
+        assertFalse(service.identity(ALICE).hasTrail());
+    }
+
+    @Test
+    @DisplayName("a trail id is matched case-insensitively and stored in its configured form")
+    void normalisesTrailCase() {
+        String id = config.trails().keySet().iterator().next();
+        service.setTrail(ALICE, id.toUpperCase());
+        assertEquals(id, service.identity(ALICE).trail());
+    }
+
+    @Test
+    @DisplayName("a blank trail clears it")
+    void blankClearsTrail() {
+        String id = config.trails().keySet().iterator().next();
+        service.setTrail(ALICE, id);
+        service.setTrail(ALICE, "  ");
+        assertNull(service.identity(ALICE).trail());
+    }
+
+    @Test
+    @DisplayName("hiding other players' trails is not gated on being a supporter")
+    void hideTrailsIsForEveryone() {
+        UUID stranger = UUID.fromString("00000000-0000-0000-0000-0000000000c3");
+        assertFalse(service.isSupporter(stranger), "precondition: not a supporter");
+
+        service.setHideTrails(stranger, true);
+        assertTrue(service.identity(stranger).hideTrails(),
+                "anyone must be able to switch off other people's particles");
+    }
+
+    @Test
+    @DisplayName("trail and visibility survive a restart alongside title and colour")
+    void trailSurvivesRestart() {
+        String id = config.trails().keySet().iterator().next();
+        service.setTitle(ALICE, "Founder");
+        service.setTrail(ALICE, id);
+        service.setHideTrails(ALICE, true);
+
+        SupporterService restarted = newService();
+        SupporterIdentity identity = restarted.identity(ALICE);
+        assertEquals("Founder", identity.title());
+        assertEquals(id, identity.trail());
+        assertTrue(identity.hideTrails());
+    }
+
+    @Test
+    @DisplayName("a new trail is backfilled into a config that predates it")
+    void backfillsNewTrails() throws Exception {
+        // A live supporter.json written before a trail existed lists only the old ones. A
+        // whole-map "if empty" guard would skip it, because the map is not empty — and the new
+        // trail would silently not exist on the one server that matters.
+        SupporterConfig older = SupporterConfig.defaults();
+        var field = SupporterConfig.class.getDeclaredField("trails");
+        field.setAccessible(true);
+        field.set(older, new java.util.LinkedHashMap<>(java.util.Map.of("sparkle", "Old_Effect")));
+
+        older.validate();
+
+        assertEquals("Old_Effect", older.trails().get("sparkle"), "admin edits must be kept");
+        assertTrue(older.trails().size() > 1, "missing trails must be added back");
+    }
+
     /** The config has no setter for the blocklist; tests need one without widening the API. */
     private static void setBlocklist(SupporterConfig config, java.util.List<String> words)
             throws Exception {
