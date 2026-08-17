@@ -1,5 +1,6 @@
 package com.peoplesserver.supportermod;
 
+import com.hypixel.hytale.event.EventPriority;
 import com.hypixel.hytale.server.core.event.events.player.PlayerChatEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -86,10 +87,16 @@ public final class SupporterPlugin extends JavaPlugin {
             getCommandRegistry().registerCommand(new SupporterCommand(this));
             getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
 
-            // Phase 2. Decorates the chat line by setting a formatter; it never cancels the
-            // event, so FactionMod's faction chat is untouched. See SupporterChatTag.
+            // Phase 2. Never cancels the event, so FactionMod's faction chat is untouched, and
+            // WRAPS whatever formatter is already in place rather than replacing it.
+            //
+            // EventPriority.LAST is load-bearing: lucko:mini-chat-formatter also sets a
+            // formatter and, at NORMAL priority, ran after us and won — which is why the tag
+            // did not appear on the first live test. Running last means we wrap its output
+            // instead of competing with it, so the configured rank and prefix survive.
             SupporterChatTag chatTag = new SupporterChatTag(service, tagColor);
-            getEventRegistry().registerGlobal(PlayerChatEvent.class, chatTag::onPlayerChat);
+            getEventRegistry().registerGlobal(
+                    EventPriority.LAST, PlayerChatEvent.class, chatTag::onPlayerChat);
 
             log.info("Ready — grace " + config.graceDays() + "d, reconcile at "
                     + config.reconcileHourUtc() + ":00 UTC");
