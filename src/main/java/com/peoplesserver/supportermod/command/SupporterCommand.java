@@ -55,6 +55,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     public SupporterCommand(SupporterPlugin plugin) {
         super("supporter", "Supporter rank: your status, and admin grant/revoke.");
         setPermissionGroup(GameMode.Adventure);
+        // Real players type the short form. Observed during non-OP testing: the first thing
+        // tried was "/sup", which returned "Command not found".
+        addAliases(new String[] {"sup", "supporters"});
         this.plugin = plugin;
         addSubCommand(new StatusSub(plugin));
         addSubCommand(new ListSub(plugin));
