@@ -23,6 +23,7 @@ import java.awt.Color;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * {@code /supporter} — status for players, grant/revoke/reconcile for admins.
@@ -59,6 +60,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         // tried was "/sup", which returned "Command not found".
         addAliases(new String[] {"sup", "supporters"});
         this.plugin = plugin;
+        addSubCommand(new InfoSub(plugin));
         addSubCommand(new StatusSub(plugin));
         addSubCommand(new ListSub(plugin));
         addSubCommand(new TitleSub(plugin));
@@ -263,7 +265,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             if (!service.isSupporter(uuid)) {
-                err(ctx, "Chat titles are a supporter perk. /supporter to find out more.");
+                err(ctx, "Chat titles are a supporter perk. /supporter info to find out more.");
                 return;
             }
             try {
@@ -337,7 +339,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             if (!service.isSupporter(uuid)) {
-                err(ctx, "Chat colours are a supporter perk. /supporter to find out more.");
+                err(ctx, "Chat colours are a supporter perk. /supporter info to find out more.");
                 return;
             }
             try {
@@ -402,7 +404,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             if (!service.isSupporter(uuid)) {
-                err(ctx, "Trails are a supporter perk. /supporter to find out more.");
+                err(ctx, "Trails are a supporter perk. /supporter info to find out more.");
                 return;
             }
             try {
@@ -544,6 +546,90 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         }
     }
 
+    // --- /supporter info ----------------------------------------------------------------------
+
+    /**
+     * The front page: what supporter rank is, what it gives, and what it costs.
+     *
+     * <p>Separate from {@code /supporter perks}, which lists features to somebody who already
+     * knows what this is. {@code info} is for the player who has just seen a chat tag and
+     * wondered what it was — so it leads with the thing that actually matters on a faction PvP
+     * server, which is that none of this can be used to win a fight.
+     *
+     * <p>Four messages already pointed players at "/supporter to find out more", and
+     * {@code /supporter} shows their status instead — so the pointer answered a question nobody
+     * had asked. They now point here.
+     *
+     * <p>Pricing is read from config and never hard-coded. If it has not been filled in, this
+     * says so plainly rather than inventing a number, and warns the admin once in the log.
+     */
+    public static final class InfoSub extends PublicPlayerCommand {
+        private static final AtomicBoolean UNCONFIGURED_WARNED = new AtomicBoolean();
+
+        private final SupporterPlugin plugin;
+
+        public InfoSub(SupporterPlugin plugin) {
+            super("info", "What supporter rank is, and what it costs.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            var config = plugin.config();
+            boolean active = service.isSupporter(player.getUuid());
+
+            ok(ctx, "Supporter rank — what it is");
+            info(ctx, "  This server is paid for by the people who play on it. Supporter rank");
+            info(ctx, "  is how you chip in, if you want to and can afford to.");
+            info(ctx, "");
+            info(ctx, "  Everything it gives you is cosmetic or convenience. It does NOT touch");
+            info(ctx, "  combat, claims, power, outpost income, KOTJ or bucks — you cannot buy");
+            info(ctx, "  an advantage here, and supporters have no edge in a fight.");
+            info(ctx, "");
+            info(ctx, "  What you get:");
+            info(ctx, "    A chat tag, your own title and chat colour");
+            info(ctx, "    Particle trails — " + config.trails().size() + " to choose from");
+            info(ctx, "    Homes: " + config.supporterHomeSlots()
+                    + " instead of " + config.defaultHomeSlots());
+            info(ctx, "    " + config.tokensPerMonth()
+                    + " tokens a month, spent on trails in /supporter shop");
+            info(ctx, "");
+
+            if (config.hasStorefront()) {
+                if (!config.priceLines().isEmpty()) {
+                    info(ctx, "  Price:");
+                    for (String line : config.priceLines()) {
+                        info(ctx, "    " + line);
+                    }
+                }
+                if (!config.storeUrl().isEmpty()) {
+                    info(ctx, "  Where: " + config.storeUrl());
+                }
+            } else {
+                info(ctx, "  Pricing is not set up yet — ask an admin how to support the server.");
+                if (UNCONFIGURED_WARNED.compareAndSet(false, true)) {
+                    plugin.log().warn("/supporter info has no pricing to show: set storeUrl and "
+                            + "priceLines in plugins/SupporterMod/supporter.json. Players asking "
+                            + "how to support the server are currently told to ask an admin.");
+                }
+            }
+
+            info(ctx, "");
+            if (active) {
+                info(ctx, "  You are a supporter — thank you. /supporter status for your time "
+                        + "left.");
+            } else {
+                info(ctx, "  /supporter perks for the full list, /supporter status for your own.");
+            }
+        }
+    }
+
     // --- /supporter tokens --------------------------------------------------------------------
 
     public static final class TokensSub extends PublicPlayerCommand {
@@ -633,7 +719,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             }
             UUID uuid = player.getUuid();
             if (!service.isSupporter(uuid)) {
-                err(ctx, "The shop is for supporters. /supporter to find out more.");
+                err(ctx, "The shop is for supporters. /supporter info to find out more.");
                 return;
             }
             String item = String.valueOf(ctx.get(idArg)).trim();
@@ -715,11 +801,13 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         public GrantSub(SupporterPlugin plugin) {
-            super("grant", "Grant supporter days: <player> <days>");
+            super("grant", "Grant supporter days: <player> <days> [transaction-id]");
             setPermissionGroup(GameMode.Creative);
             this.plugin = plugin;
             this.playerArg = withRequiredArg("player", "username", (ArgumentType) ArgTypes.STRING);
             this.daysArg = withRequiredArg("days", "days to add", (ArgumentType) ArgTypes.INTEGER);
+            // The three-argument form is what a payment provider calls. See GrantWithTxnVariant.
+            addUsageVariant(new GrantWithTxnVariant(plugin));
         }
 
         @Override
@@ -751,6 +839,82 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (RuntimeException e) {
                 err(ctx, "Grant failed: " + e.getMessage());
                 plugin.log().error("Grant failed for " + username, e);
+            }
+        }
+    }
+
+    /**
+     * {@code /supporter grant <player> <days> <transaction-id>} — the form a payment provider
+     * calls.
+     *
+     * <p><b>This variant is what makes a purchase safe to deliver.</b> Tebex retries a command
+     * until the server acknowledges it, so without a transaction id one purchase can be granted
+     * several times. {@code supporter_txn} exists to stop exactly that — its primary key IS the
+     * transaction id — but the ledger is useless unless something passes a key to it, and until
+     * now nothing could: the only grant command hard-coded {@code null}.
+     *
+     * <p>So configure the store to run:
+     *
+     * <pre>
+     * supporter grant {username} 30 {transaction}
+     * </pre>
+     *
+     * <p>A retry then reports {@code DUPLICATE_IGNORED} and changes nothing. The command still
+     * succeeds, because a provider that sees a failure will simply retry harder.
+     *
+     * <p>The two-argument form deliberately keeps no transaction id: a human typing
+     * {@code /supporter grant Someone 30} twice means it twice.
+     */
+    public static final class GrantWithTxnVariant extends CommandBase {
+        private final SupporterPlugin plugin;
+        private final Argument playerArg;
+        private final Argument daysArg;
+        private final Argument txnArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public GrantWithTxnVariant(SupporterPlugin plugin) {
+            super("Grant supporter days from a purchase, applied at most once per transaction.");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+            this.playerArg = withRequiredArg("player", "username", (ArgumentType) ArgTypes.STRING);
+            this.daysArg = withRequiredArg("days", "days to add", (ArgumentType) ArgTypes.INTEGER);
+            this.txnArg = withRequiredArg("transaction", "payment transaction id",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void executeSync(CommandContext ctx) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            String username = String.valueOf(ctx.get(playerArg)).trim();
+            int days = (Integer) ctx.get(daysArg);
+            String txn = String.valueOf(ctx.get(txnArg)).trim();
+            if (days <= 0) {
+                err(ctx, "days must be positive, got " + days);
+                return;
+            }
+            if (txn.isEmpty()) {
+                err(ctx, "transaction id must not be empty — omit it entirely for a manual grant.");
+                return;
+            }
+            try {
+                GrantResult result = service.grantByUsername(username, days, "tebex", txn);
+                switch (result.outcome()) {
+                    case CREATED -> ok(ctx, "Purchase applied: created supporter for " + username
+                            + " — " + days + " day(s). [txn " + txn + "]");
+                    case EXTENDED -> ok(ctx, "Purchase applied: extended " + username + " by "
+                            + days + " day(s) from their existing expiry. [txn " + txn + "]");
+                    case QUEUED_PENDING -> ok(ctx, "Purchase queued for " + username
+                            + " — they have never logged in; " + days
+                            + " day(s) apply on their next login. [txn " + txn + "]");
+                    case DUPLICATE_IGNORED -> info(ctx, "Transaction " + txn
+                            + " was already applied — ignored. This is the retry guard working.");
+                }
+            } catch (RuntimeException e) {
+                err(ctx, "Grant failed: " + e.getMessage());
+                plugin.log().error("Purchase grant failed for " + username + " txn " + txn, e);
             }
         }
     }

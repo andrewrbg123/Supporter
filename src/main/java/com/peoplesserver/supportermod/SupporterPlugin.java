@@ -77,7 +77,7 @@ public final class SupporterPlugin extends JavaPlugin {
             Path dataDir = Path.of("plugins", "SupporterMod");
             Files.createDirectories(dataDir);
 
-            this.config = SupporterConfig.load(dataDir.resolve("supporter.json"));
+            this.config = SupporterConfig.load(dataDir.resolve("supporter.json"), log::info);
             this.storage = SupporterStorage.open(dataDir.resolve(config.databaseFile()));
 
             Color tagColor = tagColor(config);

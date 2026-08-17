@@ -2,14 +2,18 @@ package com.peoplesserver.supportermod.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Contents of {@code supporter.json}.
@@ -119,6 +123,29 @@ public final class SupporterConfig {
     // --- Phase 6: priority queue ----------------------------------------------------------
     private int reservedSlots = 0;
 
+    // --- Storefront copy, for /supporter info ---------------------------------------------
+    //
+    // PRICING IS CONFIGURATION AND HAS NO DEFAULT ON PURPOSE. A placeholder price would be
+    // advertised to every player the moment the plugin loaded, and a wrong price shown to a
+    // paying customer is worse than no price at all. Until these are set, /supporter info says
+    // pricing is not configured and tells the player to ask an admin — which is never untrue.
+
+    /** Where to buy, shown verbatim. A store URL, or any instruction you like. */
+    private String storeUrl = "";
+
+    /**
+     * Price tiers, one per line, shown exactly as written.
+     *
+     * <p>A free-text list rather than a number and a currency code, so any currency, any tier
+     * structure and any wording works without a rebuild — and so a sale can be run by editing
+     * one line. Example:
+     *
+     * <pre>
+     * "priceLines": ["30 days - £5", "90 days - £12 (save 20%)"]
+     * </pre>
+     */
+    private List<String> priceLines = List.of();
+
     public int graceDays() {
         return graceDays;
     }
@@ -204,6 +231,19 @@ public final class SupporterConfig {
         return reservedSlots;
     }
 
+    public String storeUrl() {
+        return storeUrl == null ? "" : storeUrl.trim();
+    }
+
+    public List<String> priceLines() {
+        return priceLines == null ? List.of() : priceLines;
+    }
+
+    /** True once an admin has filled in either half of the storefront copy. */
+    public boolean hasStorefront() {
+        return !storeUrl().isEmpty() || !priceLines().isEmpty();
+    }
+
     /** Defaults, for tests and for a first run with no config file present. */
     public static SupporterConfig defaults() {
         return new SupporterConfig();
@@ -216,6 +256,14 @@ public final class SupporterConfig {
      *     stop startup rather than silently reverting somebody's paid grace period to a default
      */
     public static SupporterConfig load(Path file) throws IOException {
+        return load(file, message -> { });
+    }
+
+    /**
+     * As {@link #load(Path)}, reporting through {@code notice} when new keys are written into an
+     * existing file.
+     */
+    public static SupporterConfig load(Path file, Consumer<String> notice) throws IOException {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         if (!Files.exists(file)) {
             SupporterConfig defaults = defaults();
@@ -234,7 +282,45 @@ public final class SupporterConfig {
             throw new IllegalStateException("supporter.json is empty: " + file);
         }
         loaded.validate();
+        addMissingKeys(file, json, loaded, gson, notice);
         return loaded;
+    }
+
+    /**
+     * Writes keys this build knows about but the file does not, leaving everything else alone.
+     *
+     * <p>Without this, a new option exists only in a changelog, and using it means telling an
+     * admin to "add this key to supporter.json" — which invites pasting a fragment over the whole
+     * file. That has already happened once on this server: a config was replaced by the snippet
+     * meant to be merged into it, and it failed silently, loading zero items with no error.
+     *
+     * <p>So the merge happens here instead. <b>Only absent keys are added.</b> Existing values are
+     * never touched, and neither are keys this build does not recognise, so an admin's own edits
+     * and any hand-written notes survive a version bump. The rewrite is best-effort: a config that
+     * loaded correctly must not fail startup because the disk is read-only.
+     */
+    private static void addMissingKeys(
+            Path file, String json, SupporterConfig loaded, Gson gson, Consumer<String> notice) {
+        try {
+            JsonObject onDisk = JsonParser.parseString(json).getAsJsonObject();
+            JsonObject full = gson.toJsonTree(loaded).getAsJsonObject();
+            List<String> added = new ArrayList<>();
+            for (String key : full.keySet()) {
+                if (!onDisk.has(key)) {
+                    onDisk.add(key, full.get(key));
+                    added.add(key);
+                }
+            }
+            if (added.isEmpty()) {
+                return;
+            }
+            Files.writeString(file, gson.toJson(onDisk), StandardCharsets.UTF_8);
+            notice.accept("Added " + added.size() + " new key(s) to supporter.json: "
+                    + String.join(", ", added));
+        } catch (RuntimeException | IOException e) {
+            notice.accept("Could not add new keys to supporter.json (" + e.getMessage()
+                    + "). The plugin is running on defaults for anything missing.");
+        }
     }
 
     /** Rejects values that would silently corrupt entitlement arithmetic. */
