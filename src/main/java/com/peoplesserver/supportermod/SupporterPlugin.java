@@ -9,12 +9,14 @@ import com.peoplesserver.supportermod.command.SupporterCommand;
 import com.peoplesserver.supportermod.config.SupporterConfig;
 import com.peoplesserver.supportermod.core.ReconcileJob;
 import com.peoplesserver.supportermod.core.SupporterService;
+import com.peoplesserver.supportermod.platform.PermissionSync;
 import com.peoplesserver.supportermod.platform.PluginLog;
 import com.peoplesserver.supportermod.platform.Scheduler;
 import com.peoplesserver.supportermod.platform.hytale.ExecutorScheduler;
 import com.peoplesserver.supportermod.platform.hytale.HytaleLog;
 import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
+import com.peoplesserver.supportermod.platform.hytale.LuckPermsSync;
 import com.peoplesserver.supportermod.platform.hytale.SupporterChatTag;
 import com.peoplesserver.supportermod.platform.hytale.TrailSystem;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
@@ -79,8 +81,19 @@ public final class SupporterPlugin extends JavaPlugin {
             Color tagColor = tagColor(config);
             this.messenger = new HytaleMessenger(tagColor);
             this.directory = new HytalePlayerDirectory();
+            // LuckPerms is optional: absent, this degrades to a no-op and every other perk
+            // still works, because they are gated on SupporterService rather than permissions.
+            PermissionSync permissions = LuckPermsSync.available()
+                    ? new LuckPermsSync(config.luckPermsNodes(), log)
+                    : PermissionSync.noop();
+            if (!config.luckPermsNodes().isEmpty()) {
+                log.info(LuckPermsSync.available()
+                        ? "LuckPerms found — syncing " + config.luckPermsNodes().size() + " node(s)"
+                        : "LuckPerms NOT found — permission-gated perks (homes) will not apply");
+            }
+
             this.service = new SupporterService(
-                    storage, config, Clock.systemUTC(), directory, messenger, log);
+                    storage, config, Clock.systemUTC(), directory, messenger, log, permissions);
 
             this.scheduler = new ExecutorScheduler(getTaskRegistry());
             this.reconcileTask =

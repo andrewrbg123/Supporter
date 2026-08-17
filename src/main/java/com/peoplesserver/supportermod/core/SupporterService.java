@@ -2,6 +2,7 @@ package com.peoplesserver.supportermod.core;
 
 import com.peoplesserver.supportermod.config.SupporterConfig;
 import com.peoplesserver.supportermod.platform.Messenger;
+import com.peoplesserver.supportermod.platform.PermissionSync;
 import com.peoplesserver.supportermod.platform.PlayerDirectory;
 import com.peoplesserver.supportermod.platform.PluginLog;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
@@ -60,6 +61,7 @@ public final class SupporterService {
     private final PlayerDirectory directory;
     private final Messenger messenger;
     private final PluginLog log;
+    private final PermissionSync permissions;
 
     /**
      * Active supporters, keyed by UUID.
@@ -78,6 +80,7 @@ public final class SupporterService {
      */
     private final Map<UUID, SupporterIdentity> identityCache = new ConcurrentHashMap<>();
 
+    /** Without permission syncing — the shape tests use, and a server with no LuckPerms. */
     public SupporterService(
             SupporterStorage storage,
             SupporterConfig config,
@@ -85,13 +88,49 @@ public final class SupporterService {
             PlayerDirectory directory,
             Messenger messenger,
             PluginLog log) {
+        this(storage, config, clock, directory, messenger, log, PermissionSync.noop());
+    }
+
+    public SupporterService(
+            SupporterStorage storage,
+            SupporterConfig config,
+            Clock clock,
+            PlayerDirectory directory,
+            Messenger messenger,
+            PluginLog log,
+            PermissionSync permissions) {
         this.storage = storage;
         this.config = config;
         this.clock = clock;
         this.directory = directory;
         this.messenger = messenger;
         this.log = log;
+        this.permissions = permissions == null ? PermissionSync.noop() : permissions;
         reloadCache();
+    }
+
+    /**
+     * Pushes a player's current entitlement out to the permissions plugin.
+     *
+     * <p>Called <b>after</b> the database transaction commits, never inside it: the permissions
+     * API is asynchronous and a slow or failing external call must not hold a SQLite write open,
+     * nor roll back a purchase that already succeeded.
+     */
+    private void syncPermissions(UUID uuid) {
+        if (uuid == null) {
+            return;
+        }
+        try {
+            Optional<SupporterRecord> record = get(uuid);
+            if (record.isPresent() && record.get().entitledAt(clock.millis())) {
+                permissions.grant(uuid, record.get().username(), record.get().graceUntil());
+            } else {
+                permissions.revoke(uuid, record.map(SupporterRecord::username).orElse(null));
+            }
+        } catch (RuntimeException e) {
+            // Never fail the operation that triggered this. The money has already moved.
+            log.error("Permission sync failed for " + uuid, e);
+        }
     }
 
     /** Reloads the entitlement cache from the database. */
@@ -508,6 +547,7 @@ public final class SupporterService {
                 log.warn("Chargeback for " + uuid + ": " + days + "d removed by " + actor);
                 return null;
             });
+            syncPermissions(uuid);
         } catch (SQLException e) {
             throw new StorageException("Chargeback failed for " + uuid, e);
         }
@@ -528,7 +568,9 @@ public final class SupporterService {
         }
         Objects.requireNonNull(uuid, "uuid");
         try {
-            return storage.transact(() -> applyGrant(uuid, username, days, source, txn));
+            GrantResult result = storage.transact(() -> applyGrant(uuid, username, days, source, txn));
+            syncPermissions(uuid);
+            return result;
         } catch (SQLException e) {
             throw new StorageException("Failed to grant supporter to " + uuid, e);
         }
@@ -548,7 +590,7 @@ public final class SupporterService {
         }
         Objects.requireNonNull(username, "username");
         try {
-            return storage.transact(() -> {
+            GrantResult outcome = storage.transact(() -> {
                 if (isDuplicate(txn)) {
                     return duplicate(null);
                 }
@@ -568,6 +610,11 @@ public final class SupporterService {
                 log.info("Queued " + days + "d for unresolved username " + username);
                 return new GrantResult(GrantResult.Outcome.QUEUED_PENDING, null, 0);
             });
+            // A queued grant has no uuid yet; it syncs when the player next logs in.
+            if (outcome.record() != null) {
+                syncPermissions(outcome.record().uuid());
+            }
+            return outcome;
         } catch (SQLException e) {
             throw new StorageException("Failed to grant supporter to " + username, e);
         }
@@ -593,6 +640,7 @@ public final class SupporterService {
                 log.info("Revoked supporter for " + uuid + ": " + reason);
                 return null;
             });
+            syncPermissions(uuid);
         } catch (SQLException e) {
             throw new StorageException("Failed to revoke supporter " + uuid, e);
         }
@@ -619,6 +667,7 @@ public final class SupporterService {
                 return ids;
             });
             for (UUID uuid : expired) {
+                syncPermissions(uuid);
                 if (directory.isOnline(uuid)) {
                     messenger.send(uuid, "Your supporter rank has expired. "
                             + "Thank you for supporting the server — /supporter to renew.");
@@ -672,6 +721,12 @@ public final class SupporterService {
             messenger.send(uuid, "Your supporter rank is active — "
                     + claimedDays + " day(s) added. Thank you!");
         }
+
+        // Login is the natural moment to re-assert permissions, and the only moment a queued
+        // grant can be synced at all — it had no uuid when it was bought. It also self-heals:
+        // if a node was ever lost (LuckPerms down during a grant, a manual edit, a restore from
+        // backup), the player's next login puts it back.
+        syncPermissions(uuid);
 
         SupporterStatus status = status(uuid);
         Nudge nudge = nudgeFor(uuid, status, now);

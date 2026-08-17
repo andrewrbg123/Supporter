@@ -61,6 +61,18 @@ public final class SupporterConfig {
     private int defaultHomeCooldownSec = 300;
     private int supporterHomeCooldownSec = 60;
 
+    /**
+     * Permission nodes granted to a supporter for as long as they are entitled.
+     *
+     * <p>Written to LuckPerms as <b>temporary</b> nodes expiring at the end of the grace window,
+     * so LuckPerms removes them itself and nothing has to remember to. Empty this list to turn
+     * the whole integration off.
+     *
+     * <p>The default is the node EliteEssentials reads for the home limit. Add others here as
+     * more permission-gated perks appear — no code change needed.
+     */
+    private List<String> luckPermsNodes = List.of("eliteessentials.command.home.limit.10");
+
     // --- Phase 4: trails ------------------------------------------------------------------
     private int trailIntervalTicks = 8;
     private int maxConcurrentTrails = 40;
@@ -141,6 +153,10 @@ public final class SupporterConfig {
 
     public List<String> titleBlocklist() {
         return titleBlocklist;
+    }
+
+    public List<String> luckPermsNodes() {
+        return luckPermsNodes == null ? List.of() : luckPermsNodes;
     }
 
     public int defaultHomeSlots() {
