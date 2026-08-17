@@ -3,7 +3,10 @@ plugins {
 }
 
 group = "com.peoplesserver"
-version = "0.1.0"
+
+// Keep in step with the Version field in src/main/resources/manifest.json — Hytale reads the
+// manifest, so a mismatch ships a jar whose filename disagrees with what the server reports.
+version = "0.2.0"
 
 java {
     toolchain {
