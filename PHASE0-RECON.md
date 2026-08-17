@@ -665,7 +665,43 @@ viable on a join path.
 **`pending_grants` stays the main path, exactly as designed.** `Universe.getPlayerByUsername`
 remains online-only and is the fast path when the player happens to be connected.
 
-## 5.6 — SQLite · the server provides nothing
+## 5.6 — SQLite · ANSWERED ON THE LIVE SERVER. It works; the trap is elsewhere
+
+**Settled by deploying, 2026-08-17.** Two corrections to what this report said.
+
+**There IS a SQLite precedent on this server.** §4.2 and E13 concluded there was none because
+FactionMod contains no SQL. That was true of FactionMod and false of the server — Windskull's
+plugins have been using SQLite all along:
+
+```
+Survival: Database connection established to jdbc:sqlite:/home/container/Survival/survivalbook.db
+Survival: Database connection established to jdbc:sqlite:Hunger/hunger.db
+Survival: Database connection established to jdbc:sqlite:Thirst/thirst.db
+```
+
+Same inference error as 5.2 and 5.5: absence in FactionMod is not absence on the server.
+
+**The native library was never the risk.** The predicted failure — a native library that cannot
+unpack — did not happen. The actual first-deploy failure was:
+
+```
+java.sql.SQLException: No suitable driver found for jdbc:sqlite:/home/container/mods/...
+    at com.peoplesserver.supportermod.storage.Database.open(Database.java:26)
+```
+
+The driver was shaded correctly and `META-INF/services/java.sql.Driver` was present in the jar.
+`DriverManager` runs its `ServiceLoader` discovery **once, against the system classloader**, and
+Hytale loads each plugin in its own `PluginClassLoader` — which the system classloader cannot
+see. So a perfectly good driver sits in the jar and never registers.
+
+**The fix is to not use `DriverManager`.** `SQLiteDataSource` holds the driver directly and never
+consults the global registry, so the classloader question does not arise. It also avoids adding
+a fourth sqlite-jdbc to a registry already shared with three Windskull plugins.
+
+Anyone writing a Hytale plugin that talks to a database should assume this, not discover it:
+**`DriverManager` does not work from a plugin classloader. Use a `DataSource`.**
+
+## 5.6 (original analysis) — the server provides nothing
 
 No `sqlite`, `jdbc`, `h2` or `hsqldb` classes anywhere in the server jar. So `sqlite-jdbc` must
 be shaded into the plugin jar (the `pluginJar` task already does this) and **nothing on the
