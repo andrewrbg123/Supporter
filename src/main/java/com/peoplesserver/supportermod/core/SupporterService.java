@@ -127,6 +127,27 @@ public final class SupporterService {
         }
     }
 
+    /**
+     * Looks a supporter up by username, for admin commands — which know names, not UUIDs.
+     *
+     * <p>Reads the stored record rather than the online directory, so an offline supporter
+     * still resolves. Phase 0b confirmed the server has no offline username index, so this is
+     * the only way {@code /supporter revoke Someone} can work while they are logged out.
+     *
+     * <p>Someone who has never been a supporter returns empty even while connected, which is
+     * the right answer for revoke: there is nothing to revoke.
+     */
+    public Optional<SupporterRecord> findByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return storage.findByUsername(username.trim());
+        } catch (SQLException e) {
+            throw new StorageException("Failed to read supporter " + username, e);
+        }
+    }
+
     public SupporterStatus status(UUID uuid) {
         return get(uuid).map(r -> r.statusAt(clock.millis())).orElse(SupporterStatus.NONE);
     }
