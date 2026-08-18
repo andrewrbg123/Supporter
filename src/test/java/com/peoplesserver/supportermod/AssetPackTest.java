@@ -65,6 +65,24 @@ class AssetPackTest {
     }
 
     @Test
+    @DisplayName("every armour slot is one the server actually defines")
+    void armourSlotsAreReal() throws IOException {
+        // ItemArmorSlot declares exactly these four and nothing else, and EquipItemInteraction
+        // indexes the armour container by their ordinal. An invented slot name would fail asset
+        // validation, and a failed asset validation stops the server booting.
+        List<String> slots = List.of("Head", "Chest", "Hands", "Legs");
+        Pattern armorSlot = Pattern.compile("\"ArmorSlot\"\\s*:\\s*\"([^\"]+)\"");
+        for (Path item : itemFiles()) {
+            Matcher m = armorSlot.matcher(Files.readString(item, StandardCharsets.UTF_8));
+            while (m.find()) {
+                assertTrue(slots.contains(m.group(1)),
+                        item.getFileName() + " declares ArmorSlot '" + m.group(1)
+                                + "', but the server only defines " + slots);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("every texture and icon we reference is actually shipped")
     void referencedFilesExist() throws IOException {
         for (Path item : itemFiles()) {

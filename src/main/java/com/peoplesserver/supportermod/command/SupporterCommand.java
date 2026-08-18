@@ -671,6 +671,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         /** Matches the id of Server/Item/Items/Armor/Cloak/Supporter_Cape.json in our asset pack. */
         static final String CAPE_ITEM_ID = "Supporter_Cape";
 
+        /** The back-slot candidate — same geometry and texture, equipped like a backpack. */
+        static final String CAPE_UTILITY_ITEM_ID = "Supporter_Cape_Utility";
+
         private final SupporterPlugin plugin;
 
         public CapeSub(SupporterPlugin plugin) {
@@ -691,20 +694,35 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             try {
-                ItemStack stack = new ItemStack(CAPE_ITEM_ID, 1);
-                ItemStackTransaction tx = Player.giveItem(stack, ref, store);
-                ItemStack remainder = tx == null ? null : tx.getRemainder();
-                if (remainder != null && !remainder.isEmpty()) {
-                    err(ctx, "No room in your inventory — clear a slot and try again.");
+                // TEMPORARY: both versions, because which slot a cape should live in is still an
+                // open question. The chest one is proven to render; the utility one is modelled on
+                // the vanilla backpack, which equips through an EquipItem interaction into the
+                // UTILITY container rather than the armour one — if it works it costs no armour
+                // at all. Whichever wins, the other gets deleted.
+                boolean chest = give(ctx, ref, store, CAPE_ITEM_ID);
+                boolean utility = give(ctx, ref, store, CAPE_UTILITY_ITEM_ID);
+                if (!chest && !utility) {
+                    err(ctx, "No room in your inventory — clear two slots and try again.");
                     return;
                 }
-                ok(ctx, "Supporter cape delivered. Wear it in your chest slot.");
-                info(ctx, "It gives no protection at all, so take it off before a fight. "
-                        + "Lost it? Run this again, as often as you like.");
+                ok(ctx, "Two capes delivered, deliberately - they are a comparison.");
+                info(ctx, "One equips into the CHEST armour slot (proven, costs your chest "
+                        + "armour). The other should equip onto your BACK like a backpack, "
+                        + "costing no armour - that is the one being tested.");
+                info(ctx, "Tell me whether the second one equips, and where it lands. "
+                        + "Run this again any time; there is no limit.");
             } catch (Throwable t) {
                 err(ctx, "Could not deliver the cape: " + t.getMessage());
                 plugin.log().error("Cape delivery failed for " + player.getUuid(), t);
             }
+        }
+
+        /** @return true if the whole stack was accepted */
+        private boolean give(CommandContext ctx, Ref<EntityStore> ref, Store<EntityStore> store,
+                             String itemId) {
+            ItemStackTransaction tx = Player.giveItem(new ItemStack(itemId, 1), ref, store);
+            ItemStack remainder = tx == null ? null : tx.getRemainder();
+            return remainder == null || remainder.isEmpty();
         }
     }
 

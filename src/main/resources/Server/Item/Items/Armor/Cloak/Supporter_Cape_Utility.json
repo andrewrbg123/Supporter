@@ -1,0 +1,39 @@
+{
+  "TranslationProperties": {
+    "Name": "Supporter Cape",
+    "Description": "A cape for the people who keep this server running. Purely cosmetic - it offers no protection and no storage. Equip it to wear it on your back."
+  },
+  "Categories": [
+    "Items.Armors"
+  ],
+  "Icon": "Icons/ItemsGenerated/Supporter_Cape.png",
+  "Quality": "Common",
+  "ItemLevel": 1,
+  "Model": "Items/Back/Cape_Long.blockymodel",
+  "Texture": "Items/Armor/Supporter_Cape.png",
+  "Tags": {
+    "Family": [
+      "Cloth_Wool"
+    ],
+    "Type": [
+      "Utility"
+    ]
+  },
+  "Interactions": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "EquipItem"
+        }
+      ]
+    },
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "EquipItem"
+        }
+      ]
+    }
+  },
+  "MaxStack": 1
+}
