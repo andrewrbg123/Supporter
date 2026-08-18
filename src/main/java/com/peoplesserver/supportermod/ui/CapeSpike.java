@@ -66,40 +66,63 @@ public final class CapeSpike {
             return new Result(false, "CosmeticsModule.get() returned null");
         }
 
-        PlayerSkinComponent skinComponent =
-                store.getComponent(ref, PlayerSkinComponent.getComponentType());
-        if (skinComponent == null) {
-            return new Result(false, "player has no PlayerSkinComponent");
+        Model base;
+        String source;
+        if (texture == null) {
+            // Reset means "throw away whatever we did and rebuild from the account's own skin",
+            // so this is the one case that legitimately regenerates the model.
+            PlayerSkinComponent skinComponent =
+                    store.getComponent(ref, PlayerSkinComponent.getComponentType());
+            if (skinComponent == null) {
+                return new Result(false, "player has no PlayerSkinComponent");
+            }
+            PlayerSkin skin = skinComponent.getPlayerSkin();
+            if (skin == null) {
+                return new Result(false, "PlayerSkinComponent held a null skin");
+            }
+            base = cosmetics.createModel(skin);
+            source = "rebuilt from skin";
+        } else {
+            // START FROM THE MODEL THEY ARE ACTUALLY WEARING.
+            //
+            // The first version built a fresh model with createModel(skin) and appended to that,
+            // which put a cape on correctly and changed the rest of the character: a freshly
+            // generated model is NOT the same as the live one, and everything the live model
+            // carried beyond a plain skin build was silently thrown away. Appending to the
+            // existing model adds a cape and touches nothing else.
+            ModelComponent current = store.getComponent(ref, ModelComponent.getComponentType());
+            base = current == null ? null : current.getModel();
+            source = "appended to the live model";
+            if (base == null) {
+                return new Result(false, "player has no ModelComponent to append to");
+            }
         }
-        PlayerSkin skin = skinComponent.getPlayerSkin();
-        if (skin == null) {
-            return new Result(false, "PlayerSkinComponent held a null skin");
-        }
-
-        // Always start from a model freshly built out of the player's own skin, so a reset is
-        // simply "build it and add nothing" and repeated runs cannot stack attachments.
-        Model base = cosmetics.createModel(skin);
         if (base == null) {
-            return new Result(false, "createModel returned null for this skin");
+            return new Result(false, "no model available (" + source + ")");
         }
 
         ModelAttachment[] attachments = base.getAttachments();
-        int existing = attachments == null ? 0 : attachments.length;
         String detail;
 
         if (texture == null) {
-            detail = "reset to the player's own skin (" + existing + " attachment(s))";
+            detail = "reset - " + source + ", "
+                    + (attachments == null ? 0 : attachments.length) + " attachment(s)";
         } else {
-            ModelAttachment[] merged = attachments == null
-                    ? new ModelAttachment[1]
-                    : Arrays.copyOf(attachments, existing + 1);
-            // gradientId and gradientSet are left null deliberately: the first question is
-            // whether the attachment renders AT ALL. Tinting is a second experiment, and a null
-            // here means "no gradient" rather than a wrong one.
-            merged[existing] = new ModelAttachment(CAPE_MODEL, texture, null, null, 1.0d);
+            // Drop any cape we added earlier before adding this one, so running the command
+            // repeatedly swaps the texture rather than stacking capes.
+            ModelAttachment[] kept = attachments == null
+                    ? new ModelAttachment[0]
+                    : Arrays.stream(attachments)
+                            .filter(a -> a == null || !CAPE_MODEL.equals(a.getModel()))
+                            .toArray(ModelAttachment[]::new);
+
+            ModelAttachment[] merged = Arrays.copyOf(kept, kept.length + 1);
+            // gradientId and gradientSet stay null on purpose: the question was whether the
+            // attachment renders at all. Tinting is the next experiment, and null means "no
+            // gradient" rather than a wrong one.
+            merged[kept.length] = new ModelAttachment(CAPE_MODEL, texture, null, null, 1.0d);
             attachments = merged;
-            detail = "added attachment " + (existing + 1) + " of " + merged.length
-                    + " (model " + CAPE_MODEL + ", texture " + texture + ")";
+            detail = source + ", now " + merged.length + " attachment(s) (texture " + texture + ")";
         }
 
         Model rebuilt = rebuild(base, attachments);
