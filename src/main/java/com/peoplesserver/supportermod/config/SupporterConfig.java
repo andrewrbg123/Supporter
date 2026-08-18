@@ -51,6 +51,20 @@ public final class SupporterConfig {
     //   homes.limit.<N>
     //   ConfigManager.getMaxHomes()                 (fallback, mods/EliteEssentials/config.json)
     //
+    // TWO TRAPS IN THAT LAST LINE, both read out of EliteEssentials 2.0.8 bytecode rather than
+    // inferred from the key names:
+    //
+    //   1. getMaxHomes() returns homes.maxHomes. It is NOT a ceiling — it is the number every
+    //      player WITHOUT a node gets. A node's value is returned outright and is never clamped
+    //      against it. So maxHomes must be set to the NON-supporter allowance; leave it at 10 and
+    //      supporters are paying for a limit everybody already has.
+    //   2. homes.defaultMaxHomes is dead config. The string appears in exactly one class file:
+    //      the one declaring it. Nothing reads it, so editing it changes nothing.
+    //
+    // If EliteEssentials is ever updated, re-check both. If a later version makes maxHomes a real
+    // ceiling, this server's maxHomes of 3 would silently cap supporters at 3 and the perk would
+    // quietly stop being worth anything.
+    //
     // Building a second home system inside SupporterMod would mean two competing /home
     // commands, so the perk is delivered by configuring those instead. What these keys do is
     // drive what /supporter perks TELLS players — so if you change the real limits in
