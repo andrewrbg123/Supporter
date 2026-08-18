@@ -16,12 +16,12 @@ import javax.imageio.ImageIO;
  * mirrored exactly in the model's per-face offsets:
  *
  * <pre>
- * brim top/bottom    46x42 at (1,1)
- * brim front/back     46x2 at (1,45)
- * brim left/right     42x2 at (1,49)
- * dome front/back    24x10 at (1,53)
- * dome left/right    22x10 at (27,53)
- * dome top/bottom    24x22 at (50,1)
+ * brim top/bottom    52x48 at (1,1)
+ * brim front/back     52x2 at (1,50)
+ * brim left/right     48x2 at (1,53)
+ * dome front/back    24x12 at (55,1)
+ * dome left/right    22x12 at (55,15)
+ * dome top/bottom    24x22 at (55,29)
  * </pre>
  *
  * <p>Leather brown rather than a chat colour — a cowboy hat in frost blue stops being a cowboy
@@ -50,56 +50,60 @@ public final class CowboyHatGen {
         Graphics2D g = img.createGraphics();
 
         // Brim top/bottom: leather with a darker rim ring and a subtle radial darkening toward
-        // the edge, so the brim reads as curved even though it is a flat box.
-        for (int y = 0; y < 42; y++) {
-            for (int x = 0; x < 46; x++) {
-                float dx = Math.abs(x - 22.5f) / 22.5f;
-                float dy = Math.abs(y - 20.5f) / 20.5f;
+        // the edge, so the brim reads as curved even though it is a flat box. 52x48, enlarged
+        // and raised after the first live test showed the smaller brim slicing through the
+        // FALLBACK haircut - the hide list swaps big hair for a shorter cut, exactly as vanilla
+        // helmets do, but this player's fallback still carries back volume that vanilla's
+        // close-fitting helms never collide with.
+        for (int y = 0; y < 48; y++) {
+            for (int x = 0; x < 52; x++) {
+                float dx = Math.abs(x - 25.5f) / 25.5f;
+                float dy = Math.abs(y - 23.5f) / 23.5f;
                 float edge = Math.max(dx, dy);
                 g.setColor(mix(LEATHER, LEATHER_DEEP, edge * 0.8f));
                 g.fillRect(1 + x, 1 + y, 1, 1);
             }
         }
         g.setColor(TRIM);
-        g.drawRect(1, 1, 45, 41);
+        g.drawRect(1, 1, 51, 47);
 
         // Brim edges.
         g.setColor(TRIM);
-        g.fillRect(1, 45, 46, 2);
-        g.fillRect(1, 49, 42, 2);
+        g.fillRect(1, 50, 52, 2);
+        g.fillRect(1, 53, 48, 2);
 
         // Dome front/back: leather gradient with the hatband along the bottom three rows and the
-        // amber buckle centred on it.
-        domeSide(g, 1, 53, 24, true);
+        // amber buckle centred on it. 12 tall to keep proportion with the bigger brim.
+        domeSide(g, 55, 1, 24, true);
         // Dome left/right: same, no buckle.
-        domeSide(g, 27, 53, 22, false);
+        domeSide(g, 55, 15, 22, false);
 
         // Dome top: leather with the classic centre crease painted as a dark front-to-back line.
         for (int y = 0; y < 22; y++) {
             for (int x = 0; x < 24; x++) {
                 float dx = Math.abs(x - 11.5f) / 11.5f;
                 g.setColor(mix(LEATHER, LEATHER_DEEP, dx * 0.5f));
-                g.fillRect(50 + x, 1 + y, 1, 1);
+                g.fillRect(55 + x, 29 + y, 1, 1);
             }
         }
         g.setColor(TRIM);
-        g.fillRect(50 + 11, 1, 2, 22);
-        g.drawRect(50, 1, 23, 21);
+        g.fillRect(55 + 11, 29, 2, 22);
+        g.drawRect(55, 29, 23, 21);
 
         g.dispose();
         return img;
     }
 
     private static void domeSide(Graphics2D g, int x, int y, int w, boolean buckle) {
-        for (int row = 0; row < 10; row++) {
-            g.setColor(mix(LEATHER, LEATHER_DEEP, row / 9f));
+        for (int row = 0; row < 12; row++) {
+            g.setColor(mix(LEATHER, LEATHER_DEEP, row / 11f));
             g.fillRect(x, y + row, w, 1);
         }
         g.setColor(BAND);
-        g.fillRect(x, y + 7, w, 3);
+        g.fillRect(x, y + 9, w, 3);
         if (buckle) {
             g.setColor(BUCKLE);
-            g.fillRect(x + (w / 2) - 1, y + 7, 3, 3);
+            g.fillRect(x + (w / 2) - 1, y + 9, 3, 3);
         }
     }
 

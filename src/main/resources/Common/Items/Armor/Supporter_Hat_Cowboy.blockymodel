@@ -22,7 +22,7 @@
         {
           "id": "2",
           "name": "Brim",
-          "position": {"x": 0, "y": 10, "z": 0.55},
+          "position": {"x": 0, "y": 14, "z": 0.55},
           "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
           "shape": {
             "type": "box",
@@ -30,13 +30,13 @@
             "stretch": {"x": 1, "y": 1, "z": 1},
             "settings": {
               "isPiece": false,
-              "size": {"x": 46, "y": 2, "z": 42}
+              "size": {"x": 52, "y": 2, "z": 48}
             },
             "textureLayout": {
-              "front":  {"offset": {"x": 1, "y": 45}, "mirror": {"x": false, "y": false}, "angle": 0},
-              "back":   {"offset": {"x": 1, "y": 45}, "mirror": {"x": false, "y": false}, "angle": 0},
-              "left":   {"offset": {"x": 1, "y": 49}, "mirror": {"x": false, "y": false}, "angle": 0},
-              "right":  {"offset": {"x": 1, "y": 49}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "front":  {"offset": {"x": 1, "y": 50}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "back":   {"offset": {"x": 1, "y": 50}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "left":   {"offset": {"x": 1, "y": 53}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "right":  {"offset": {"x": 1, "y": 53}, "mirror": {"x": false, "y": false}, "angle": 0},
               "top":    {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
               "bottom": {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0}
             },
@@ -57,15 +57,15 @@
                 "stretch": {"x": 1, "y": 1, "z": 1},
                 "settings": {
                   "isPiece": false,
-                  "size": {"x": 24, "y": 10, "z": 22}
+                  "size": {"x": 24, "y": 12, "z": 22}
                 },
                 "textureLayout": {
-                  "front":  {"offset": {"x": 1, "y": 53},  "mirror": {"x": false, "y": false}, "angle": 0},
-                  "back":   {"offset": {"x": 1, "y": 53},  "mirror": {"x": false, "y": false}, "angle": 0},
-                  "left":   {"offset": {"x": 27, "y": 53}, "mirror": {"x": false, "y": false}, "angle": 0},
-                  "right":  {"offset": {"x": 27, "y": 53}, "mirror": {"x": false, "y": false}, "angle": 0},
-                  "top":    {"offset": {"x": 50, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
-                  "bottom": {"offset": {"x": 50, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0}
+                  "front":  {"offset": {"x": 55, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 55, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 55, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 55, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 55, "y": 29}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 55, "y": 29}, "mirror": {"x": false, "y": false}, "angle": 0}
                 },
                 "unwrapMode": "custom",
                 "visible": true,
