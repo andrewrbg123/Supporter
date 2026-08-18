@@ -306,29 +306,57 @@ public final class SupporterPlugin extends JavaPlugin {
                 messenger.send(uuid, "Your supporter purchase has been applied — "
                         + result.claimedDays() + " day(s) added. Thank you!");
             }
-            // v0.17.0: re-apply the chosen body skin. The client composes the real appearance
-            // fresh at login, which is exactly why the tint has to be pushed again here — and
-            // also why a bad stored value is harmless: it is ignored, and the composed look
-            // stands. Gated on entitlement like every perk; the stored choice outlives a lapse
-            // but stops applying.
+            // v0.17.0/v0.18.1: re-apply the chosen skin. Two lessons live here:
+            //
+            // FORGET FIRST. The restore caches survive a relog inside the same server session,
+            // and a fresh login makes them stale — the account rebuild is now the truth, and
+            // without this line "off" could hand back the PREVIOUS session's look.
+            //
+            // DELAYED, not at ready. The immediate re-apply worked for tints (a model push
+            // lands whenever it arrives) but not costumes: the login sequence is still settling
+            // at ready and overwrote the skin swap — the player arrived as themselves. Two
+            // seconds later the composition is stable. The scheduler thread only resolves the
+            // world before handing the component work to world.execute — the trail system's
+            // split.
+            com.peoplesserver.supportermod.ui.SkinChanger.forget(uuid);
             try {
                 com.peoplesserver.supportermod.core.SupporterIdentity identity =
                         current.identity(uuid);
-                if (identity.hasSkin() && current.isSupporter(uuid)
-                        && event.getPlayerRef() != null
-                        && event.getPlayerRef().getStore() != null) {
-                    com.peoplesserver.supportermod.ui.SkinChanger.Result applied =
-                            com.peoplesserver.supportermod.ui.SkinChanger.applyByName(
-                                    event.getPlayerRef().getStore(), event.getPlayerRef(),
-                                    uuid, identity.skin());
-                    if (!applied.applied()) {
-                        log.warn("Stored skin '" + identity.skin() + "' not re-applied for "
-                                + username + ": " + applied.detail());
-                    }
+                if (identity.hasSkin() && current.isSupporter(uuid)) {
+                    String storedSkin = identity.skin();
+                    var playerEntity = event.getPlayerRef();
+                    scheduler.runOnce(() -> {
+                        try {
+                            var universe = com.hypixel.hytale.server.core.universe.Universe.get();
+                            if (universe == null || playerEntity == null) {
+                                return;
+                            }
+                            for (var world : universe.getWorlds().values()) {
+                                if (world.getEntityStore().getStore() == playerEntity.getStore()) {
+                                    world.execute(() -> {
+                                        var applied = com.peoplesserver.supportermod.ui.SkinChanger
+                                                .applyByName(playerEntity.getStore(),
+                                                        playerEntity, uuid, storedSkin);
+                                        if (applied.applied()) {
+                                            log.info("Re-applied skin '" + storedSkin
+                                                    + "' for " + username);
+                                        } else {
+                                            log.warn("Stored skin '" + storedSkin
+                                                    + "' not re-applied for " + username
+                                                    + ": " + applied.detail());
+                                        }
+                                    });
+                                    return;
+                                }
+                            }
+                        } catch (Throwable t) {
+                            log.warn("Skin re-apply failed for " + username + ": " + t);
+                        }
+                    }, 2000);
                 }
             } catch (Throwable t) {
                 // A cosmetic must never break a login.
-                log.warn("Skin re-apply failed for " + username + ": " + t);
+                log.warn("Skin re-apply scheduling failed for " + username + ": " + t);
             }
 
             switch (result.nudge()) {

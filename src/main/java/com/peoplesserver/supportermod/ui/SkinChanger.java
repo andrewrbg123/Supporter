@@ -236,9 +236,10 @@ public final class SkinChanger {
         return new Result(true, "restored");
     }
 
-    /** Drops the cached original without pushing it — for disconnects. */
+    /** Drops both restore caches without pushing — at login, the account rebuild is the truth. */
     public static void forget(UUID uuid) {
         ORIGINALS.remove(uuid);
+        ORIGINAL_SKINS.remove(uuid);
     }
 
     /**

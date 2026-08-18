@@ -47,6 +47,19 @@ public final class ExecutorScheduler implements Scheduler, AutoCloseable {
     }
 
     @Override
+    public Task runOnce(Runnable job, long delayMs) {
+        Runnable guarded = () -> {
+            try {
+                job.run();
+            } catch (Throwable t) {
+                System.err.println("[SupporterMod] one-shot job failed: " + t);
+            }
+        };
+        ScheduledFuture<?> future = executor.schedule(guarded, delayMs, TimeUnit.MILLISECONDS);
+        return () -> future.cancel(false);
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public Task scheduleRepeating(Runnable job, long initialDelayMs, long periodMs) {
         // Swallow throwables inside the job: an uncaught exception from scheduleAtFixedRate

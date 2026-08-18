@@ -16,4 +16,7 @@ public interface Scheduler {
 
     /** Runs {@code job} after {@code initialDelayMs}, then every {@code periodMs}. */
     Task scheduleRepeating(Runnable job, long initialDelayMs, long periodMs);
+
+    /** One-shot: runs the job once after the delay. */
+    Task runOnce(Runnable job, long delayMs);
 }
