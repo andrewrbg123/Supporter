@@ -200,8 +200,14 @@ public final class SupporterPanel {
         row += 3;
         tab = (TabContentBuilder) tab.addChild(line("StTokens",
                 service.tokenBalance(uuid) + " token(s) to spend", theme.body(), row++));
+        // Name them, do not count them. "1 unlock(s) owned" was the first thing anybody asked
+        // about after seeing this panel, which is a fair sign that a bare count answers nothing.
+        java.util.List<String> unlocks = service.unlocks(uuid);
         tab = (TabContentBuilder) tab.addChild(line("StUnlocks",
-                service.unlocks(uuid).size() + " unlock(s) owned", theme.dim(), row));
+                unlocks.isEmpty()
+                        ? "No trails bought yet - the free ones are yours already"
+                        : "Trails bought: " + String.join(", ", unlocks),
+                theme.dim(), row));
         return tab;
     }
 
