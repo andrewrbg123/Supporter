@@ -133,6 +133,13 @@ final class Migrations {
                     PRIMARY KEY (uuid, item_id)
                 )
                 """
+            },
+            // --- V5: v0.17.0 body skins ---------------------------------------------------
+            new String[] {
+                // The chosen body-tint skin, re-applied at login. Same rules as every other
+                // identity column: it outlives a lapse (stops applying, is not deleted), and
+                // a name no longer in the catalogue is ignored rather than an error.
+                "ALTER TABLE supporter_identity ADD COLUMN skin TEXT"
             });
 
     static void apply(Connection conn) throws SQLException {

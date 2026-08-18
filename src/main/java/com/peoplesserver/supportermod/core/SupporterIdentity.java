@@ -19,11 +19,14 @@ package com.peoplesserver.supportermod.core;
  * @param title      custom title shown before the username, or null
  * @param chatColor  hex colour for the supporter tag, e.g. {@code #55FFFF}, or null
  * @param trail      trail id from {@code SupporterConfig.trails()}, or null for none
+ * @param skin       body-tint skin name from {@code SkinChanger.SKINS}, or null for none
  * @param hideTrails true if this player does not want to see anyone else's trail
  */
-public record SupporterIdentity(String title, String chatColor, String trail, boolean hideTrails) {
+public record SupporterIdentity(
+        String title, String chatColor, String trail, String skin, boolean hideTrails) {
 
-    public static final SupporterIdentity NONE = new SupporterIdentity(null, null, null, false);
+    public static final SupporterIdentity NONE =
+            new SupporterIdentity(null, null, null, null, false);
 
     public boolean hasTitle() {
         return title != null && !title.isBlank();
@@ -37,23 +40,31 @@ public record SupporterIdentity(String title, String chatColor, String trail, bo
         return trail != null && !trail.isBlank();
     }
 
+    public boolean hasSkin() {
+        return skin != null && !skin.isBlank();
+    }
+
     public boolean isEmpty() {
-        return !hasTitle() && !hasColor() && !hasTrail() && !hideTrails;
+        return !hasTitle() && !hasColor() && !hasTrail() && !hasSkin() && !hideTrails;
     }
 
     public SupporterIdentity withTitle(String newTitle) {
-        return new SupporterIdentity(newTitle, chatColor, trail, hideTrails);
+        return new SupporterIdentity(newTitle, chatColor, trail, skin, hideTrails);
     }
 
     public SupporterIdentity withColor(String newColor) {
-        return new SupporterIdentity(title, newColor, trail, hideTrails);
+        return new SupporterIdentity(title, newColor, trail, skin, hideTrails);
     }
 
     public SupporterIdentity withTrail(String newTrail) {
-        return new SupporterIdentity(title, chatColor, newTrail, hideTrails);
+        return new SupporterIdentity(title, chatColor, newTrail, skin, hideTrails);
+    }
+
+    public SupporterIdentity withSkin(String newSkin) {
+        return new SupporterIdentity(title, chatColor, trail, newSkin, hideTrails);
     }
 
     public SupporterIdentity withHideTrails(boolean hide) {
-        return new SupporterIdentity(title, chatColor, trail, hide);
+        return new SupporterIdentity(title, chatColor, trail, skin, hide);
     }
 }

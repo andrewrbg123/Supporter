@@ -874,18 +874,10 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      */
     public static final class SkinSub extends PublicPlayerCommand {
 
-        /** Skin name → gradientSet/gradientId, all from the client's own GradientSets.json. */
-        static final java.util.Map<String, String[]> SKINS = new java.util.LinkedHashMap<>();
-
-        static {
-            SKINS.put("gold", new String[] {"Ornamented_Metal", "Gold_Red"});
-            SKINS.put("silver", new String[] {"Ornamented_Metal", "Silver_Blue"});
-            SKINS.put("iron", new String[] {"Ornamented_Metal", "Iron_Black"});
-            SKINS.put("shadow", new String[] {"Flashy_Synthetic", "Black"});
-        }
-
         public SkinSub(SupporterPlugin plugin) {
-            super("skin", "Body tints: " + String.join(", ", SKINS.keySet()) + ", off");
+            super("skin", "Body tints: "
+                    + String.join(", ", com.peoplesserver.supportermod.ui.SkinChanger.SKINS
+                            .keySet()) + ", off");
             setPermissionGroup(GameMode.Adventure);
             addAliases(new String[] {"skins"});
             addUsageVariant(new SkinVariant(plugin));
@@ -894,8 +886,10 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                                PlayerRef player, World world) {
-            ok(ctx, "Skins: " + String.join(", ", SKINS.keySet()) + " — or off");
-            info(ctx, "/supporter skin <name>. Experimental: resets when you relog.");
+            ok(ctx, "Skins: " + String.join(", ",
+                    com.peoplesserver.supportermod.ui.SkinChanger.SKINS.keySet()) + " — or off");
+            info(ctx, "/supporter skin <name>. Yours stays on until you turn it off — "
+                    + "even across relogs.");
         }
     }
 
@@ -926,13 +920,21 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             }
             String name = String.valueOf(ctx.get(nameArg)).trim().toLowerCase();
             boolean off = name.equals("off");
-            String[] tint = SkinSub.SKINS.get(name);
-            if (!off && tint == null) {
-                err(ctx, "No such skin. Choose from: "
-                        + String.join(", ", SkinSub.SKINS.keySet()) + ", off");
+            if (!off && !com.peoplesserver.supportermod.ui.SkinChanger.SKINS.containsKey(name)) {
+                err(ctx, "No such skin. Choose from: " + String.join(", ",
+                        com.peoplesserver.supportermod.ui.SkinChanger.SKINS.keySet()) + ", off");
                 return;
             }
             java.util.UUID uuid = player.getUuid();
+            // The DB write happens before the world-thread hop: SQLite is safe from any thread,
+            // and the choice must persist even if the visual push fails — login re-applies it.
+            try {
+                service.setSkin(uuid, off ? null : name);
+            } catch (RuntimeException e) {
+                err(ctx, "Could not save your skin choice: " + e.getMessage());
+                plugin.log().error("setSkin failed for " + uuid, e);
+                return;
+            }
             // Explicit hand-off: every SkinChanger entry point touches components, and being
             // explicit about the world thread costs nothing.
             world.execute(() -> {
@@ -940,17 +942,16 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                     com.peoplesserver.supportermod.ui.SkinChanger.Result result = off
                             ? com.peoplesserver.supportermod.ui.SkinChanger.restore(
                                     store, ref, uuid)
-                            : com.peoplesserver.supportermod.ui.SkinChanger.apply(
-                                    store, ref, uuid, tint[0], tint[1]);
-                    if (result.applied()) {
-                        ok(ctx, off ? "Skin off - colour restored."
+                            : com.peoplesserver.supportermod.ui.SkinChanger.applyByName(
+                                    store, ref, uuid, name);
+                    if (result.applied() || off) {
+                        ok(ctx, off ? "Skin off — you are fully restored."
                                 : "Skin on: " + name + ". Third person to see it.");
-                        info(ctx, off
-                                ? "If your hair or clothes are still missing, relog - the "
-                                        + "server can only rebuild your full look at login."
-                                : "Statue mode: hair and clothing are packed away while it is "
-                                        + "on. Worn supporter gear still shows. /supporter skin "
-                                        + "off for your colour, relog for everything.");
+                        if (!off) {
+                            info(ctx, "Statue mode: hair and clothing are packed away while "
+                                    + "it is on; worn supporter gear still shows. It stays "
+                                    + "until you turn it off — even across relogs.");
+                        }
                     } else {
                         err(ctx, "Skin change failed: " + result.detail());
                     }

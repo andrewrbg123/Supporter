@@ -910,12 +910,74 @@ public final class SupporterPanel {
         }
         row += 2;
 
+        tab = (TabContentBuilder) tab.addChild(line("WdSkins",
+                "Body skins — statue mode; stays on across relogs", theme.heading(), row++));
+        index = 0;
+        for (String skinName : SkinChanger.SKINS.keySet()) {
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    "WdSkin_" + skinName, skinName, theme.buttonLabel(),
+                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
+                            service, uuid, playerRef, skinName, world, ctx)));
+            index++;
+        }
+        tab = (TabContentBuilder) tab.addChild(wearButton(
+                "WdSkin_off", "off", theme.buttonLabel(),
+                index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
+                        service, uuid, playerRef, null, world, ctx)));
+        row += 2;
+
         tab = (TabContentBuilder) tab.addChild(line("WdNote",
                 "Everything here is cosmetic — zero protection, and each shares a slot with "
                         + "real armour, so take it off before a fight. Lost something? "
                         + "Get it again, free, as often as you like.",
                 theme.dim(), row));
         return tab;
+    }
+
+    /** Skin buttons: persist the choice, then push the visual on the world thread. */
+    private void setSkin(SupporterService service, UUID uuid, PlayerRef playerRef,
+                         String skinName, World world, au.ellie.hyui.events.UIContext ctx) {
+        boolean off = skinName == null;
+        try {
+            service.setSkin(uuid, skinName);
+        } catch (RuntimeException e) {
+            plugin.log().error("setSkin failed for " + uuid, e);
+            world.execute(() -> {
+                ctx.editById(NOTICE_ID, LabelBuilder.class,
+                        l -> l.withText("Could not save your skin choice — try the chat command."));
+                ctx.updatePage(false);
+            });
+            return;
+        }
+        world.execute(() -> {
+            String note;
+            try {
+                Ref<EntityStore> ref = playerRef.getReference();
+                if (ref == null || ref.getStore() == null) {
+                    note = "Saved — it will apply next login.";
+                } else {
+                    SkinChanger.Result result = off
+                            ? SkinChanger.restore(ref.getStore(), ref, uuid)
+                            : SkinChanger.applyByName(ref.getStore(), ref, uuid, skinName);
+                    note = off ? "Skin off — you are fully restored."
+                            : result.applied()
+                                    ? "Skin on: " + skinName + " — statue mode, stays until off."
+                                    : "Saved, but the visual push failed — relog to see it.";
+                }
+            } catch (Throwable t) {
+                plugin.log().error("Skin change failed for " + uuid, t);
+                note = "Saved, but the visual push failed — relog to see it.";
+            }
+            String message = note;
+            try {
+                ctx.editById(NOTICE_ID, LabelBuilder.class, l -> l.withText(message));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Skin notice refresh failed: " + t);
+            }
+        });
     }
 
     private CustomButtonBuilder wearButton(String id, String text, HyUIStyle labelStyle,

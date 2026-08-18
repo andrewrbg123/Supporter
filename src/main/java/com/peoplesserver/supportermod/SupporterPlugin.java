@@ -249,6 +249,31 @@ public final class SupporterPlugin extends JavaPlugin {
                 messenger.send(uuid, "Your supporter purchase has been applied — "
                         + result.claimedDays() + " day(s) added. Thank you!");
             }
+            // v0.17.0: re-apply the chosen body skin. The client composes the real appearance
+            // fresh at login, which is exactly why the tint has to be pushed again here — and
+            // also why a bad stored value is harmless: it is ignored, and the composed look
+            // stands. Gated on entitlement like every perk; the stored choice outlives a lapse
+            // but stops applying.
+            try {
+                com.peoplesserver.supportermod.core.SupporterIdentity identity =
+                        current.identity(uuid);
+                if (identity.hasSkin() && current.isSupporter(uuid)
+                        && event.getPlayerRef() != null
+                        && event.getPlayerRef().getStore() != null) {
+                    com.peoplesserver.supportermod.ui.SkinChanger.Result applied =
+                            com.peoplesserver.supportermod.ui.SkinChanger.applyByName(
+                                    event.getPlayerRef().getStore(), event.getPlayerRef(),
+                                    uuid, identity.skin());
+                    if (!applied.applied()) {
+                        log.warn("Stored skin '" + identity.skin() + "' not re-applied for "
+                                + username + ": " + applied.detail());
+                    }
+                }
+            } catch (Throwable t) {
+                // A cosmetic must never break a login.
+                log.warn("Skin re-apply failed for " + username + ": " + t);
+            }
+
             switch (result.nudge()) {
                 case RENEWAL_SOON -> messenger.send(uuid,
                         "Your supporter rank expires in " + current.daysRemaining(uuid)

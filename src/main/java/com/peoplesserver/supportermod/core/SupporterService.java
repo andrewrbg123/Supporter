@@ -325,6 +325,19 @@ public final class SupporterService {
      * perk that cannot be switched off by the people who have to look at it is a nuisance, not
      * a perk.
      */
+    /**
+     * Sets or clears the body-tint skin. Null or blank clears it.
+     *
+     * <p>No catalogue validation here, deliberately: the catalogue lives in the UI layer
+     * (SkinChanger.SKINS), the command validates against it before calling, and a stored name
+     * that later leaves the catalogue is ignored at login rather than treated as an error.
+     */
+    public synchronized SupporterIdentity setSkin(UUID uuid, String skin) {
+        String clean = skin == null || skin.isBlank() ? null : skin.trim().toLowerCase();
+        return writeIdentity(uuid, identity(uuid).withSkin(clean), "SKIN",
+                clean == null ? "cleared" : clean);
+    }
+
     public synchronized SupporterIdentity setHideTrails(UUID uuid, boolean hide) {
         return writeIdentity(uuid, identity(uuid).withHideTrails(hide), "TRAIL_VISIBILITY",
                 hide ? "hidden" : "shown");

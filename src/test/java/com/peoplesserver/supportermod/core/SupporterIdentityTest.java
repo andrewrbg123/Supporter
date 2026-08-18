@@ -90,6 +90,23 @@ class SupporterIdentityTest {
     }
 
     @Test
+    @DisplayName("the chosen skin survives a restart, and off clears it")
+    void skinSurvivesRestart() {
+        // The write path succeeded on the first live build while the READ path silently returned
+        // null: identity() swallows SQLException into NONE by design (chat must not break over a
+        // read), and the read SELECT did not list the new column. This test is what catches that
+        // class of bug — the round trip through a genuinely fresh service.
+        service.setSkin(ALICE, "Gold");
+
+        SupporterService restarted = newService();
+        assertEquals("gold", restarted.identity(ALICE).skin(),
+                "stored lowercased, read back after restart");
+
+        restarted.setSkin(ALICE, null);
+        assertNull(newService().identity(ALICE).skin(), "off must clear the stored choice");
+    }
+
+    @Test
     @DisplayName("a blank title clears rather than storing whitespace")
     void blankClears() {
         service.setTitle(ALICE, "Founder");

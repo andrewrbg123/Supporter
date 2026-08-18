@@ -33,6 +33,30 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class SkinChanger {
 
+    /**
+     * Skin name → gradientSet/gradientId. The catalogue lives here rather than in the command so
+     * the login re-apply and the panel read the same source; every entry is a client-shipped
+     * gradient from GradientSets.json.
+     */
+    public static final Map<String, String[]> SKINS = new java.util.LinkedHashMap<>();
+
+    static {
+        SKINS.put("gold", new String[] {"Ornamented_Metal", "Gold_Red"});
+        SKINS.put("silver", new String[] {"Ornamented_Metal", "Silver_Blue"});
+        SKINS.put("iron", new String[] {"Ornamented_Metal", "Iron_Black"});
+        SKINS.put("shadow", new String[] {"Flashy_Synthetic", "Black"});
+    }
+
+    /** Applies a catalogue skin by name; unknown names are refused, not errors. */
+    public static Result applyByName(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid,
+                                     String name) {
+        String[] tint = name == null ? null : SKINS.get(name.toLowerCase());
+        if (tint == null) {
+            return new Result(false, "unknown skin: " + name);
+        }
+        return apply(store, ref, uuid, tint[0], tint[1]);
+    }
+
     /** The live model each player had before their first tint, for restore. */
     private static final Map<UUID, Model> ORIGINALS = new ConcurrentHashMap<>();
 
