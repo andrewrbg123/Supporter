@@ -6,6 +6,9 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerSetupConnectEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.peoplesserver.supportermod.command.SupporterCommand;
 import com.peoplesserver.supportermod.config.SupporterConfig;
 import com.peoplesserver.supportermod.core.ReconcileJob;
@@ -13,6 +16,7 @@ import com.peoplesserver.supportermod.core.SupporterService;
 import com.peoplesserver.supportermod.platform.PermissionSync;
 import com.peoplesserver.supportermod.platform.PluginLog;
 import com.peoplesserver.supportermod.platform.Scheduler;
+import com.peoplesserver.supportermod.ui.SupporterPanel;
 import com.peoplesserver.supportermod.platform.hytale.ExecutorScheduler;
 import com.peoplesserver.supportermod.platform.hytale.HytaleLog;
 import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
@@ -49,6 +53,8 @@ import java.util.UUID;
 public final class SupporterPlugin extends JavaPlugin {
 
     private PluginLog log;
+    /** Null until HyUI is probed on first use. Never resolved during setup - see hyUiPresent(). */
+    private volatile Boolean hyUiAvailable;
     private SupporterConfig config;
     private SupporterStorage storage;
     private SupporterService service;
@@ -255,6 +261,55 @@ public final class SupporterPlugin extends JavaPlugin {
             // A failed login hook must never stop a player joining.
             log.error("onLogin failed", e);
         }
+    }
+
+    // --- UI -----------------------------------------------------------------------------------
+
+    /**
+     * Opens the supporter panel for a player.
+     *
+     * @return false if HyUI is absent or the panel could not be built, meaning the caller should
+     *     fall back to chat
+     */
+    public boolean openPanel(PlayerRef player, Store<EntityStore> store) {
+        if (!hyUiPresent()) {
+            return false;
+        }
+        try {
+            return new SupporterPanel(this).open(player, store);
+        } catch (Throwable t) {
+            log.warn("Supporter panel unavailable: " + t);
+            return false;
+        }
+    }
+
+    /**
+     * Whether HyUI's classes are loadable, resolved once on FIRST USE and never during setup.
+     *
+     * <p>Probing at startup is how the LuckPerms integration silently did nothing for a whole
+     * session in 0.6.1: {@code setup()} runs before other plugins are enabled, so the answer
+     * cached there was "no" and stayed wrong until a restart. The same trap applies to any
+     * optional dependency, so this deliberately answers late.
+     *
+     * <p>Also why {@code Ellie:HyUI} is declared in OptionalDependencies: without it this
+     * plugin's classloader cannot see HyUI's classes at all, which is the same class of failure
+     * as the JDBC driver in 0.2.1.
+     */
+    private boolean hyUiPresent() {
+        Boolean cached = hyUiAvailable;
+        if (cached != null) {
+            return cached;
+        }
+        boolean present;
+        try {
+            Class.forName("au.ellie.hyui.builders.PageBuilder", false, getClass().getClassLoader());
+            present = true;
+        } catch (Throwable t) {
+            present = false;
+            log.info("HyUI not present — /supporter will use chat output.");
+        }
+        hyUiAvailable = present;
+        return present;
     }
 
     // --- accessors for the command tree ------------------------------------------------------

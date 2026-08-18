@@ -86,9 +86,19 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         return false;
     }
 
+    /**
+     * Opens the panel, or prints the chat status if it cannot be opened.
+     *
+     * <p>The fallback is the point. HyUI is optional, panels can fail to build, and a player
+     * typing {@code /supporter} must always get an answer — so a UI failure costs them the window,
+     * never the information.
+     */
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef player, World world) {
+        if (plugin.openPanel(player, store)) {
+            return;
+        }
         StatusSub.render(plugin, ctx, player.getUuid());
     }
 
