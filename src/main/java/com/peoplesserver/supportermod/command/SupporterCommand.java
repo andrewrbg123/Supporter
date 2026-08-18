@@ -22,7 +22,6 @@ import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.ReconcileReport;
 import com.peoplesserver.supportermod.core.SupporterRecord;
 import com.peoplesserver.supportermod.core.SupporterService;
-import com.peoplesserver.supportermod.ui.CapeSpike;
 import java.awt.Color;
 import java.util.List;
 import java.util.Optional;
@@ -80,8 +79,6 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
         addSubCommand(new ReconcileSub(plugin));
-        // SPIKE, remove with CapeSpike once the attachment question is answered.
-        addSubCommand(new CapeTestSub(plugin));
     }
 
     /**
@@ -671,9 +668,6 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         /** Matches the id of Server/Item/Items/Armor/Cloak/Supporter_Cape.json in our asset pack. */
         static final String CAPE_ITEM_ID = "Supporter_Cape";
 
-        /** The back-slot candidate — same geometry and texture, equipped like a backpack. */
-        static final String CAPE_UTILITY_ITEM_ID = "Supporter_Cape_Utility";
-
         private final SupporterPlugin plugin;
 
         public CapeSub(SupporterPlugin plugin) {
@@ -694,23 +688,13 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             try {
-                // TEMPORARY: both versions, because which slot a cape should live in is still an
-                // open question. The chest one is proven to render; the utility one is modelled on
-                // the vanilla backpack, which equips through an EquipItem interaction into the
-                // UTILITY container rather than the armour one — if it works it costs no armour
-                // at all. Whichever wins, the other gets deleted.
-                boolean chest = give(ctx, ref, store, CAPE_ITEM_ID);
-                boolean utility = give(ctx, ref, store, CAPE_UTILITY_ITEM_ID);
-                if (!chest && !utility) {
-                    err(ctx, "No room in your inventory — clear two slots and try again.");
+                if (!give(ctx, ref, store, CAPE_ITEM_ID)) {
+                    err(ctx, "No room in your inventory — clear a slot and try again.");
                     return;
                 }
-                ok(ctx, "Two capes delivered, deliberately - they are a comparison.");
-                info(ctx, "One equips into the CHEST armour slot (proven, costs your chest "
-                        + "armour). The other should equip onto your BACK like a backpack, "
-                        + "costing no armour - that is the one being tested.");
-                info(ctx, "Tell me whether the second one equips, and where it lands. "
-                        + "Run this again any time; there is no limit.");
+                ok(ctx, "Supporter cape delivered. Wear it in your chest slot.");
+                info(ctx, "It gives no protection at all, so take it off before a fight. "
+                        + "Lost it? Run this again, as often as you like.");
             } catch (Throwable t) {
                 err(ctx, "Could not deliver the cape: " + t.getMessage());
                 plugin.log().error("Cape delivery failed for " + player.getUuid(), t);
@@ -1012,79 +996,6 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 err(ctx, "Grant failed: " + e.getMessage());
                 plugin.log().error("Purchase grant failed for " + username + " txn " + txn, e);
             }
-        }
-    }
-
-    /**
-     * {@code /supporter capetest <texture|reset>} — a temporary experiment, admin only.
-     *
-     * <p>Answers whether a {@link com.peoplesserver.supportermod.ui.CapeSpike model attachment}
-     * layers a cape onto a player or is treated as a weighted pool. Delete this along with
-     * {@code CapeSpike} once that is known.
-     *
-     * <p>Deliberately takes the texture as an argument so different paths can be tried without a
-     * rebuild — which matters, because the most likely failure is a texture the client cannot
-     * resolve, and that is indistinguishable from "attachments do not layer" unless you can try
-     * several.
-     */
-    public static final class CapeTestSub extends AbstractPlayerCommand {
-        private final SupporterPlugin plugin;
-        private final Argument textureArg;
-
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        public CapeTestSub(SupporterPlugin plugin) {
-            super("capetest", "SPIKE: attach a cape model to yourself. 'reset' to undo.");
-            setPermissionGroup(GameMode.Creative);
-            this.plugin = plugin;
-            this.textureArg = withRequiredArg("texture", "texture path, or reset",
-                    (ArgumentType) ArgTypes.STRING);
-        }
-
-        /**
-         * Player-only, unlike the other admin subcommands.
-         *
-         * <p>{@code grant} extends {@code CommandBase} because Tebex runs it from the console.
-         * This one changes the caller's own model, so it needs a player and a world — and
-         * {@code AbstractPlayerCommand} hands both over rather than making us resolve them.
-         */
-        @Override
-        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
-                               PlayerRef player, World world) {
-            String texture = String.valueOf(ctx.get(textureArg)).trim();
-
-            // Handed to the world thread even though this may already be on it: component reads
-            // and writes are world-thread only, and being explicit costs nothing.
-            world.execute(() -> {
-                try {
-                    // "list" changes nothing and prints what the player is wearing. "noop"
-                    // rebuilds the model identically and pushes it, which separates "the rebuild
-                    // is lossy" from "the cape disturbs the other attachments" — the two
-                    // remaining explanations for the character changing.
-                    if (texture.equalsIgnoreCase("list")) {
-                        ok(ctx, "capetest: your live model");
-                        for (String line : CapeSpike.describe(store, ref)) {
-                            info(ctx, line);
-                        }
-                        plugin.log().info("capetest list: "
-                                + String.join(" | ", CapeSpike.describe(store, ref)));
-                        return;
-                    }
-
-                    CapeSpike.Result result = texture.equalsIgnoreCase("noop")
-                            ? CapeSpike.rebuildUnchanged(store, ref)
-                            : CapeSpike.apply(store, ref,
-                                    texture.equalsIgnoreCase("reset") ? null : texture);
-
-                    if (result.applied()) {
-                        ok(ctx, "capetest: " + result.detail());
-                    } else {
-                        err(ctx, "capetest failed: " + result.detail());
-                    }
-                } catch (Throwable t) {
-                    err(ctx, "capetest threw: " + t);
-                    plugin.log().error("capetest failed", t);
-                }
-            });
         }
     }
 
