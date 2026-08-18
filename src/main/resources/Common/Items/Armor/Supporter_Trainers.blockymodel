@@ -40,7 +40,7 @@
           "children": [
             {
               "id": "3",
-              "name": "L-Trainer",
+              "name": "L-Sole",
               "position": {"x": 0, "y": 0, "z": 0},
               "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
               "shape": {
@@ -49,15 +49,72 @@
                 "stretch": {"x": 1, "y": 1, "z": 1},
                 "settings": {
                   "isPiece": false,
-                  "size": {"x": 15, "y": 7, "z": 21}
+                  "size": {"x": 16, "y": 3, "z": 23}
                 },
                 "textureLayout": {
-                  "left":   {"offset": {"x": 1, "y": 1},   "mirror": {"x": false, "y": false}, "angle": 0},
-                  "right":  {"offset": {"x": 1, "y": 1},   "mirror": {"x": false, "y": false}, "angle": 0},
-                  "front":  {"offset": {"x": 1, "y": 10},  "mirror": {"x": false, "y": false}, "angle": 0},
-                  "back":   {"offset": {"x": 17, "y": 10}, "mirror": {"x": false, "y": false}, "angle": 0},
-                  "top":    {"offset": {"x": 24, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
-                  "bottom": {"offset": {"x": 41, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0}
+                  "left":   {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "front":  {"offset": {"x": 1, "y": 6},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 1, "y": 6},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 1, "y": 36}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 1, "y": 11}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "7",
+              "name": "L-Upper",
+              "position": {"x": 0, "y": 3, "z": 0},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 14, "y": 5, "z": 19}
+                },
+                "textureLayout": {
+                  "left":   {"offset": {"x": 26, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 26, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "front":  {"offset": {"x": 26, "y": 8}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 41, "y": 8}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 47, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 47, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "8",
+              "name": "L-Collar",
+              "position": {"x": 0, "y": 8, "z": -6.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 14, "y": 3, "z": 8},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "left":   {"offset": {"x": 26, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 26, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "front":  {"offset": {"x": 36, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 36, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 26, "y": 20}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 26, "y": 20}, "mirror": {"x": false, "y": false}, "angle": 0}
                 },
                 "unwrapMode": "custom",
                 "visible": true,
@@ -110,7 +167,7 @@
           "children": [
             {
               "id": "6",
-              "name": "R-Trainer",
+              "name": "R-Sole",
               "position": {"x": 0, "y": 0, "z": 0},
               "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
               "shape": {
@@ -119,15 +176,72 @@
                 "stretch": {"x": 1, "y": 1, "z": 1},
                 "settings": {
                   "isPiece": false,
-                  "size": {"x": 15, "y": 7, "z": 21}
+                  "size": {"x": 16, "y": 3, "z": 23}
                 },
                 "textureLayout": {
-                  "left":   {"offset": {"x": 1, "y": 1},   "mirror": {"x": false, "y": false}, "angle": 0},
-                  "right":  {"offset": {"x": 1, "y": 1},   "mirror": {"x": false, "y": false}, "angle": 0},
-                  "front":  {"offset": {"x": 1, "y": 10},  "mirror": {"x": false, "y": false}, "angle": 0},
-                  "back":   {"offset": {"x": 17, "y": 10}, "mirror": {"x": false, "y": false}, "angle": 0},
-                  "top":    {"offset": {"x": 24, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
-                  "bottom": {"offset": {"x": 41, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0}
+                  "left":   {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "front":  {"offset": {"x": 1, "y": 6},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 1, "y": 6},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 1, "y": 36}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 1, "y": 11}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "9",
+              "name": "R-Upper",
+              "position": {"x": 0, "y": 3, "z": 0},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 14, "y": 5, "z": 19}
+                },
+                "textureLayout": {
+                  "left":   {"offset": {"x": 26, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 26, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "front":  {"offset": {"x": 26, "y": 8}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 41, "y": 8}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 47, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 47, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "10",
+              "name": "R-Collar",
+              "position": {"x": 0, "y": 8, "z": -6.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 14, "y": 3, "z": 8},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "left":   {"offset": {"x": 26, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 26, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "front":  {"offset": {"x": 36, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 36, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 26, "y": 20}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 26, "y": 20}, "mirror": {"x": false, "y": false}, "angle": 0}
                 },
                 "unwrapMode": "custom",
                 "visible": true,

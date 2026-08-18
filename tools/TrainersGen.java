@@ -49,64 +49,97 @@ public final class TrainersGen {
         System.out.println("done");
     }
 
+    /**
+     * v2 layout, three boxes per foot instead of one painted brick:
+     *
+     * <pre>
+     * sole side    23x3  at (1,1)     sole ends   16x3  at (1,6)
+     * sole tread   16x23 at (1,11)    sole top    16x23 at (1,36)
+     * upper side   19x5  at (26,1)    upper toe   14x5  at (26,8)
+     * upper heel   14x5  at (41,8)    upper top   14x19 at (47,1)
+     * collar side   8x3  at (26,15)   collar ends 14x3  at (36,15)
+     * collar top   14x8  at (26,20)
+     * </pre>
+     */
     private static BufferedImage texture() {
         BufferedImage img = new BufferedImage(TEX, TEX, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
 
-        // Sides: white upper shading down, amber stripe through the middle, sole band along the
-        // bottom two rows with a lighter edge line above it.
-        for (int y = 0; y < 7; y++) {
-            g.setColor(mix(UPPER, UPPER_SHADE, y / 6f));
-            g.fillRect(1, 1 + y, 21, 1);
-        }
-        g.setColor(STRIPE);
-        g.fillRect(3, 3, 17, 2);
-        g.setColor(SOLE_EDGE);
-        g.fillRect(1, 6, 21, 1);
+        // Sole: cream midsole over a dark outsole — the two-tone edge is what makes a chunky
+        // sneaker sole read as one.
+        soleStrip(g, 1, 1, 23);
+        soleStrip(g, 1, 6, 16);
+        // Tread underside.
         g.setColor(SOLE);
-        g.fillRect(1, 7, 21, 1);
-
-        // Toe: white with the sole band.
-        face(g, 1, 10, 15);
-        // Heel: same, plus a vertical amber tab.
-        face(g, 17, 10, 15);
-        g.setColor(STRIPE);
-        g.fillRect(17 + 6, 10, 3, 4);
-
-        // Top: white with lace crosses on the front half (low z = toe end).
-        for (int y = 0; y < 21; y++) {
-            g.setColor(mix(UPPER, UPPER_SHADE, y / 20f));
-            g.fillRect(24, 19 + y, 15, 1);
-        }
-        g.setColor(LACE);
-        for (int row = 0; row < 3; row++) {
-            g.fillRect(24 + 4, 19 + 4 + (row * 3), 7, 1);
-        }
-        g.setColor(SOLE_EDGE);
-        g.drawRect(24, 19, 14, 20);
-
-        // Sole underside: dark with a tread pattern.
-        g.setColor(SOLE);
-        g.fillRect(41, 19, 15, 21);
+        g.fillRect(1, 11, 16, 23);
         g.setColor(SOLE_EDGE);
         for (int row = 0; row < 5; row++) {
-            g.fillRect(42, 21 + (row * 4), 13, 1);
+            g.fillRect(2, 13 + (row * 4), 14, 1);
         }
+        // Sole top, hidden under the upper.
+        g.setColor(SOLE);
+        g.fillRect(1, 36, 16, 23);
+
+        // Upper side: white with the amber swoosh sweeping the middle rows.
+        for (int y = 0; y < 5; y++) {
+            g.setColor(mix(UPPER, UPPER_SHADE, y / 4f));
+            g.fillRect(26, 1 + y, 19, 1);
+        }
+        g.setColor(STRIPE);
+        g.fillRect(28, 3, 12, 1);
+        g.fillRect(36, 2, 6, 1);
+
+        // Toe: white with two rows of perforation dots.
+        for (int y = 0; y < 5; y++) {
+            g.setColor(mix(UPPER, UPPER_SHADE, y / 4f));
+            g.fillRect(26, 8 + y, 14, 1);
+        }
+        g.setColor(UPPER_SHADE);
+        for (int dot = 0; dot < 4; dot++) {
+            g.fillRect(28 + (dot * 3), 9, 1, 1);
+            g.fillRect(29 + (dot * 3), 11, 1, 1);
+        }
+
+        // Heel: white with a vertical amber pull tab.
+        for (int y = 0; y < 5; y++) {
+            g.setColor(mix(UPPER, UPPER_SHADE, y / 4f));
+            g.fillRect(41, 8 + y, 14, 1);
+        }
+        g.setColor(STRIPE);
+        g.fillRect(41 + 6, 8, 2, 4);
+
+        // Upper top: white with lace crosses.
+        for (int y = 0; y < 19; y++) {
+            g.setColor(mix(UPPER, UPPER_SHADE, y / 18f));
+            g.fillRect(47, 1 + y, 14, 1);
+        }
+        g.setColor(LACE);
+        for (int row = 0; row < 4; row++) {
+            g.fillRect(47 + 3, 1 + 4 + (row * 3), 8, 1);
+        }
+
+        // Collar: padded cream with the dark ankle opening on top.
+        g.setColor(UPPER_SHADE);
+        g.fillRect(26, 15, 8, 3);
+        g.fillRect(36, 15, 14, 3);
+        g.setColor(SOLE_EDGE);
+        g.fillRect(26, 15, 8, 1);
+        g.fillRect(36, 15, 14, 1);
+        g.setColor(SOLE);
+        g.fillRect(26, 20, 14, 8);
+        g.setColor(UPPER_SHADE);
+        g.drawRect(26, 20, 13, 7);
 
         g.dispose();
         return img;
     }
 
-    /** A 15-wide, 7-tall end face: white upper over the sole band. */
-    private static void face(Graphics2D g, int x, int y, int w) {
-        for (int row = 0; row < 7; row++) {
-            g.setColor(mix(UPPER, UPPER_SHADE, row / 6f));
-            g.fillRect(x, y + row, w, 1);
-        }
-        g.setColor(SOLE_EDGE);
-        g.fillRect(x, y + 5, w, 1);
+    /** Sole side/end strip: cream midsole rows over one dark outsole row. */
+    private static void soleStrip(Graphics2D g, int x, int y, int w) {
+        g.setColor(UPPER_SHADE);
+        g.fillRect(x, y, w, 2);
         g.setColor(SOLE);
-        g.fillRect(x, y + 6, w, 1);
+        g.fillRect(x, y + 2, w, 1);
     }
 
     private static BufferedImage icon() {
