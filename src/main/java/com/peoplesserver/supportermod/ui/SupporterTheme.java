@@ -86,7 +86,7 @@ public final class SupporterTheme {
 
     public HyUIStyle title() {
         return new HyUIStyle()
-                .setFontSize(26f)
+                .setFontSize(30f)
                 .setRenderBold(true)
                 .setRenderUppercase(true)
                 .setLetterSpacing(2)
@@ -95,19 +95,19 @@ public final class SupporterTheme {
     }
 
     public HyUIStyle heading() {
-        return new HyUIStyle().setFontSize(17f).setRenderBold(true).setTextColor(accent);
+        return new HyUIStyle().setFontSize(20f).setRenderBold(true).setTextColor(accent);
     }
 
     public HyUIStyle body() {
-        return new HyUIStyle().setFontSize(15f).setTextColor(INK_BODY).setWrap(true);
+        return new HyUIStyle().setFontSize(18f).setTextColor(INK_BODY).setWrap(true);
     }
 
     public HyUIStyle dim() {
-        return new HyUIStyle().setFontSize(14f).setTextColor(INK_DIM).setWrap(true);
+        return new HyUIStyle().setFontSize(16f).setTextColor(INK_DIM).setWrap(true);
     }
 
     public HyUIStyle coloured(String hex, boolean bold) {
-        return new HyUIStyle().setFontSize(15f).setRenderBold(bold).setTextColor(hex).setWrap(true);
+        return new HyUIStyle().setFontSize(18f).setRenderBold(bold).setTextColor(hex).setWrap(true);
     }
 
     /**
@@ -117,7 +117,7 @@ public final class SupporterTheme {
      */
     public HyUIStyle buttonLabel() {
         return new HyUIStyle()
-                .setFontSize(13f)
+                .setFontSize(16f)
                 .setRenderBold(true)
                 .setShrinkTextToFit(true)
                 .setMinShrinkTextToFitFontSize(8f)
@@ -130,7 +130,7 @@ public final class SupporterTheme {
      * first build reused the body style, whose wrap=true folded "#FFAA00" onto two lines. */
     public HyUIStyle swatchLabel(String hex) {
         return new HyUIStyle()
-                .setFontSize(12f)
+                .setFontSize(15f)
                 .setRenderBold(true)
                 .setShrinkTextToFit(true)
                 .setMinShrinkTextToFitFontSize(8f)
@@ -140,10 +140,10 @@ public final class SupporterTheme {
     }
 
     public HyUIStyle selectedTab() {
-        return new HyUIStyle().setFontSize(15f).setRenderBold(true).setTextColor(accent);
+        return new HyUIStyle().setFontSize(17f).setRenderBold(true).setTextColor(accent);
     }
 
     public HyUIStyle unselectedTab() {
-        return new HyUIStyle().setFontSize(15f).setTextColor(INK_DIM);
+        return new HyUIStyle().setFontSize(17f).setTextColor(INK_DIM);
     }
 }

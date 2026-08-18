@@ -59,23 +59,23 @@ public final class SupporterPanel {
     private static final String ROOT_ID = "SupporterRoot";
     private static final String TABS_ID = "SupporterTabs";
 
-    private static final int WIDTH = 720;
-    private static final int HEIGHT = 520;
+    private static final int WIDTH = 960;
+    private static final int HEIGHT = 660;
     private static final int PAD = 24;
     /**
      * Row pitch. Must exceed BUY_HEIGHT, or the Buy buttons on consecutive rows overlap - the
      * first build had 24 against a 26-tall button and they visibly touched.
      */
-    private static final int ROW_HEIGHT = 30;
+    private static final int ROW_HEIGHT = 38;
 
     /** Tab hit area. Text-only tabs were too small a target on the first live build. */
-    private static final int TAB_WIDTH = 102; // narrowed from 150 when the bar grew to six tabs
-    private static final int TAB_HEIGHT = 36;
+    private static final int TAB_WIDTH = 142; // six tabs across the wider panel
+    private static final int TAB_HEIGHT = 42;
     private static final int TAB_SPACING = 10;
 
     /** Buy button, sized to sit on the right of a shop row. */
-    private static final int BUY_WIDTH = 96;
-    private static final int BUY_HEIGHT = 26;
+    private static final int BUY_WIDTH = 120;
+    private static final int BUY_HEIGHT = 32;
 
     private static final String BALANCE_ID = "SupBalance";
     private static final String NOTICE_ID = "SupNotice";
@@ -110,7 +110,7 @@ public final class SupporterPanel {
 
             GroupBuilder root = (GroupBuilder) GroupBuilder.group()
                     .withId(ROOT_ID)
-                    .withAnchor(new HyUIAnchor().setTop(110).setWidth(WIDTH).setHeight(HEIGHT))
+                    .withAnchor(new HyUIAnchor().setTop(70).setWidth(WIDTH).setHeight(HEIGHT))
                     .withBackground(theme.panelBackground());
 
             root = (GroupBuilder) root.addChild(SceneBlurBuilder.sceneBlur().withId("SupBlur"));
@@ -140,13 +140,13 @@ public final class SupporterPanel {
     private UIElementBuilder<?> header(SupporterService service, UUID uuid) {
         GroupBuilder header = (GroupBuilder) GroupBuilder.group()
                 .withId("SupHeader")
-                .withAnchor(new HyUIAnchor().setTop(0).setLeft(0).setWidth(WIDTH).setHeight(62))
+                .withAnchor(new HyUIAnchor().setTop(0).setLeft(0).setWidth(WIDTH).setHeight(74))
                 .withBackground(theme.headerBackground());
 
         header = (GroupBuilder) header.addChild(text("SupTitle", "Supporter",
-                theme.title(), 12, PAD, WIDTH - (PAD * 2), 30));
+                theme.title(), 14, PAD, WIDTH - (PAD * 2), 36));
         header = (GroupBuilder) header.addChild(text("SupSubtitle", subtitle(service, uuid),
-                theme.dim(), 40, PAD, WIDTH - (PAD * 2), 18));
+                theme.dim(), 48, PAD, WIDTH - (PAD * 2), 20));
         return header;
     }
 
@@ -180,7 +180,7 @@ public final class SupporterPanel {
                 .addTab("chat", "Chat", tabButton("chat"))
                 .addTab("about", "About", tabButton("about"))
                 .withId(TABS_ID)
-                .withAnchor(new HyUIAnchor().setTop(62).setLeft(PAD)
+                .withAnchor(new HyUIAnchor().setTop(80).setLeft(PAD)
                         .setWidth(WIDTH - (PAD * 2)).setHeight(TAB_HEIGHT));
     }
 
@@ -206,7 +206,7 @@ public final class SupporterPanel {
      */
     private LabelBuilder notice() {
         return text(NOTICE_ID, "", theme.dim(),
-                HEIGHT - 40, PAD, WIDTH - (PAD * 2), 22);
+                HEIGHT - 52, PAD, WIDTH - (PAD * 2), 26);
     }
 
     // --- tabs -----------------------------------------------------------------------------
@@ -216,8 +216,8 @@ public final class SupporterPanel {
                 .withTabNavigationId(TABS_ID)
                 .withTabId(tabId)
                 .withId("SupContent_" + tabId)
-                .withAnchor(new HyUIAnchor().setTop(118).setLeft(PAD)
-                        .setWidth(WIDTH - (PAD * 2)).setHeight(HEIGHT - 150));
+                .withAnchor(new HyUIAnchor().setTop(134).setLeft(PAD)
+                        .setWidth(WIDTH - (PAD * 2)).setHeight(HEIGHT - 192));
     }
 
     private UIElementBuilder<?> statusTab(SupporterService service, UUID uuid) {
@@ -537,7 +537,7 @@ public final class SupporterPanel {
                                              int top) {
         CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
                 .withId(TRAIL_TOGGLE_ID)
-                .withAnchor(new HyUIAnchor().setTop(top).setLeft(0).setWidth(280).setHeight(BUY_HEIGHT));
+                .withAnchor(new HyUIAnchor().setTop(top).setLeft(0).setWidth(340).setHeight(BUY_HEIGHT));
         button = button.withText(toggleText(service, uuid))
                 .withDefaultLabelStyle(theme.buttonLabel())
                 .withHoveredLabelStyle(theme.buttonLabel())
@@ -675,7 +675,7 @@ public final class SupporterPanel {
         TextFieldBuilder field = (TextFieldBuilder) TextFieldBuilder.textInput()
                 .withId(CHAT_FIELD_ID)
                 .withAnchor(new HyUIAnchor().setTop(row * ROW_HEIGHT - 4).setLeft(0)
-                        .setWidth(300).setHeight(28));
+                        .setWidth(420).setHeight(34));
         field = field.withPlaceholderText("Your title...")
                 .withValue(service.identity(uuid).title() == null
                         ? "" : service.identity(uuid).title())
@@ -685,11 +685,11 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(field);
 
         tab = (TabContentBuilder) tab.addChild(
-                smallButton("ChTitleSet", "Set title", 312, row * ROW_HEIGHT - 4,
+                smallButton("ChTitleSet", "Set title", 436, row * ROW_HEIGHT - 4,
                         (Void v, au.ellie.hyui.events.UIContext ctx) ->
                                 setTitle(service, uuid, world, ctx, false)));
         tab = (TabContentBuilder) tab.addChild(
-                smallButton("ChTitleClear", "Clear", 312 + BUY_WIDTH + 8, row * ROW_HEIGHT - 4,
+                smallButton("ChTitleClear", "Clear", 436 + BUY_WIDTH + 8, row * ROW_HEIGHT - 4,
                         (Void v, au.ellie.hyui.events.UIContext ctx) ->
                                 setTitle(service, uuid, world, ctx, true)));
         row += 2;
@@ -723,7 +723,7 @@ public final class SupporterPanel {
         row += 1 + ((index - 1) / 6) + 1;
 
         tab = (TabContentBuilder) tab.addChild(
-                smallButton("ChColorClear", "Default colour", 0, row * ROW_HEIGHT - 4,
+                smallButton("ChColorClear", "Default", 0, row * ROW_HEIGHT - 4,
                         (Void v, au.ellie.hyui.events.UIContext ctx) ->
                                 setColor(service, uuid, null, world, ctx)));
         return tab;

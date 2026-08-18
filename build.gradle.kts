@@ -6,7 +6,7 @@ group = "com.peoplesserver"
 
 // Keep in step with the Version field in src/main/resources/manifest.json — Hytale reads the
 // manifest, so a mismatch ships a jar whose filename disagrees with what the server reports.
-version = "0.10.1"
+version = "0.10.2"
 
 java {
     toolchain {
