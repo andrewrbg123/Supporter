@@ -8,6 +8,7 @@ import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.peoplesserver.supportermod.command.SupporterCommand;
 import com.peoplesserver.supportermod.config.SupporterConfig;
@@ -271,12 +272,12 @@ public final class SupporterPlugin extends JavaPlugin {
      * @return false if HyUI is absent or the panel could not be built, meaning the caller should
      *     fall back to chat
      */
-    public boolean openPanel(PlayerRef player, Store<EntityStore> store) {
+    public boolean openPanel(PlayerRef player, Store<EntityStore> store, World world) {
         if (!hyUiPresent()) {
             return false;
         }
         try {
-            return new SupporterPanel(this).open(player, store);
+            return new SupporterPanel(this).open(player, store, world);
         } catch (Throwable t) {
             log.warn("Supporter panel unavailable: " + t);
             return false;

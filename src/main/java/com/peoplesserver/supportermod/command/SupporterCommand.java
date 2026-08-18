@@ -96,7 +96,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                            PlayerRef player, World world) {
-        if (plugin.openPanel(player, store)) {
+        if (plugin.openPanel(player, store, world)) {
             return;
         }
         StatusSub.render(plugin, ctx, player.getUuid());

@@ -14,6 +14,7 @@ import au.ellie.hyui.builders.UIElementBuilder;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import com.peoplesserver.supportermod.SupporterPlugin;
@@ -21,6 +22,9 @@ import com.peoplesserver.supportermod.config.SupporterConfig;
 import com.peoplesserver.supportermod.core.SupporterRecord;
 import com.peoplesserver.supportermod.core.SupporterService;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -63,6 +67,13 @@ public final class SupporterPanel {
     private static final int TAB_HEIGHT = 36;
     private static final int TAB_SPACING = 12;
 
+    /** Buy button, sized to sit on the right of a shop row. */
+    private static final int BUY_WIDTH = 96;
+    private static final int BUY_HEIGHT = 26;
+
+    private static final String BALANCE_ID = "SupBalance";
+    private static final String NOTICE_ID = "SupNotice";
+
     private final SupporterPlugin plugin;
     private final SupporterTheme theme;
 
@@ -76,7 +87,7 @@ public final class SupporterPanel {
      *
      * @return true if it opened; false means the caller should fall back to chat
      */
-    public boolean open(PlayerRef playerRef, Store<EntityStore> store) {
+    public boolean open(PlayerRef playerRef, Store<EntityStore> store, World world) {
         try {
             UUID uuid = playerRef.getUuid();
             SupporterService service = plugin.service();
@@ -94,6 +105,8 @@ public final class SupporterPanel {
             root = (GroupBuilder) root.addChild(tabBar());
             root = (GroupBuilder) root.addChild(statusTab(service, uuid));
             root = (GroupBuilder) root.addChild(perksTab(service, uuid));
+            root = (GroupBuilder) root.addChild(shopTab(service, uuid, world));
+            root = (GroupBuilder) root.addChild(notice());
             root = (GroupBuilder) root.addChild(aboutTab());
 
             PageBuilder page = (PageBuilder) PageBuilder.pageForPlayer(playerRef).addElement(root);
@@ -147,6 +160,7 @@ public final class SupporterPanel {
                 .withTabSpacing(TAB_SPACING)
                 .addTab("status", "Status", tabButton("status"))
                 .addTab("perks", "Perks", tabButton("perks"))
+                .addTab("shop", "Shop", tabButton("shop"))
                 .addTab("about", "About", tabButton("about"))
                 .withId(TABS_ID)
                 .withAnchor(new HyUIAnchor().setTop(62).setLeft(PAD)
@@ -161,6 +175,18 @@ public final class SupporterPanel {
                 .withDefaultBackground(theme.tabBackground())
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
+    }
+
+    /**
+     * A single line at the bottom that purchases write their result into.
+     *
+     * <p>It sits outside the tab content and starts empty. A purchase has to say something — a
+     * button that silently succeeds is indistinguishable from a button that silently failed — and
+     * chat is the wrong place for it when the player is looking at a panel.
+     */
+    private LabelBuilder notice() {
+        return text(NOTICE_ID, "", theme.dim(),
+                HEIGHT - 40, PAD, WIDTH - (PAD * 2), 22);
     }
 
     // --- tabs -----------------------------------------------------------------------------
@@ -234,6 +260,139 @@ public final class SupporterPanel {
                         : "You do not have these yet.",
                 theme.dim(), row));
         return tab;
+    }
+
+    /**
+     * The shop: every trail, what it costs, and a button that buys it.
+     *
+     * <p>Buying happens in place. The button callback runs the purchase and then rewrites just the
+     * affected labels through {@link au.ellie.hyui.events.UIContext#editById}, rather than closing
+     * and reopening the panel — a page is a snapshot, so without this the numbers would sit there
+     * stale until the player reopened it and it would look as though nothing happened.
+     *
+     * <p><b>The update is handed to the world thread.</b> {@code updatePage} reads a {@code Player}
+     * component off the store, and component reads are world-thread only. The click callback
+     * arrives on a network thread, so it does the SQLite work (safe from anywhere, the service is
+     * synchronized) and then hands the UI half to {@code world.execute}. This is the same split
+     * the trail system uses.
+     */
+    private UIElementBuilder<?> shopTab(SupporterService service, UUID uuid, World world) {
+        SupporterConfig config = plugin.config();
+        TabContentBuilder tab = content("shop");
+        int row = 0;
+
+        tab = (TabContentBuilder) tab.addChild(line(BALANCE_ID,
+                balanceText(service, uuid), theme.heading(), row));
+        row += 2;
+
+        if (!service.isSupporter(uuid)) {
+            tab = (TabContentBuilder) tab.addChild(line("ShopLocked",
+                    "The shop is for supporters. The About tab explains how to become one.",
+                    theme.dim(), row));
+            return tab;
+        }
+
+        // Cheapest first, so the free ones lead and the ladder reads as a ladder. Sorted rather
+        // than map order because the config is a plain JSON object and its iteration order is
+        // whatever the admin's file happens to say.
+        List<String> ids = new ArrayList<>(config.trails().keySet());
+        ids.sort(Comparator.comparingInt(config::trailCost).thenComparing(id -> id));
+
+        for (String id : ids) {
+            tab = (TabContentBuilder) tab.addChild(
+                    line(rowId(id), rowText(service, uuid, id), rowStyle(service, uuid, id), row));
+            if (buyable(service, uuid, id)) {
+                tab = (TabContentBuilder) tab.addChild(buyButton(service, uuid, id, world, row));
+            }
+            row++;
+        }
+        return tab;
+    }
+
+    private boolean buyable(SupporterService service, UUID uuid, String id) {
+        return plugin.config().trailCost(id) > 0 && !service.unlocks(uuid).contains(id);
+    }
+
+    private CustomButtonBuilder buyButton(SupporterService service, UUID uuid, String trailId,
+                                          World world, int row) {
+        CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
+                .withId("SupBuy_" + trailId)
+                .withAnchor(new HyUIAnchor()
+                        .setTop(row * ROW_HEIGHT - 4)
+                        .setLeft(WIDTH - (PAD * 2) - BUY_WIDTH)
+                        .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
+        button = button.withText("Buy")
+                .withDefaultBackground(theme.tabBackground())
+                .withHoveredBackground(theme.tabHovered())
+                .withPressedBackground(theme.tabPressed());
+        return button.addEventListener(CustomUIEventBindingType.Activating,
+                (Void v, au.ellie.hyui.events.UIContext ctx) -> buy(service, uuid, trailId, world, ctx));
+    }
+
+    private void buy(SupporterService service, UUID uuid, String trailId, World world,
+                     au.ellie.hyui.events.UIContext ctx) {
+        String message;
+        try {
+            message = switch (service.purchaseTrail(uuid, trailId)) {
+                case BOUGHT -> "Bought " + trailId + " - /supporter trail " + trailId
+                        + " to wear it";
+                case ALREADY_OWNED -> "You already own " + trailId;
+                case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + trailId;
+                case FREE -> trailId + " is free - /supporter trail " + trailId;
+                case UNKNOWN_ITEM -> "That trail no longer exists";
+            };
+        } catch (RuntimeException e) {
+            // The money half already succeeded or failed on its own terms; never let the UI half
+            // turn a storage error into a silent no-op.
+            plugin.log().error("Trail purchase failed for " + uuid + " (" + trailId + ")", e);
+            message = "Purchase failed - try /supporter buy " + trailId;
+        }
+
+        String note = message;
+        world.execute(() -> {
+            try {
+                ctx.editById(BALANCE_ID, LabelBuilder.class,
+                        label -> label.withText(balanceText(service, uuid)));
+                ctx.editById(rowId(trailId), LabelBuilder.class,
+                        label -> label.withText(rowText(service, uuid, trailId)));
+                ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(note));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Shop panel refresh failed: " + t);
+            }
+        });
+    }
+
+    private static String rowId(String trailId) {
+        return "SupTrail_" + trailId;
+    }
+
+    private String balanceText(SupporterService service, UUID uuid) {
+        return service.tokenBalance(uuid) + " token(s) to spend";
+    }
+
+    private String rowText(SupporterService service, UUID uuid, String trailId) {
+        int cost = plugin.config().trailCost(trailId);
+        if (cost <= 0) {
+            return trailId + " - free";
+        }
+        if (service.unlocks(uuid).contains(trailId)) {
+            return trailId + " - owned";
+        }
+        int short_ = cost - service.tokenBalance(uuid);
+        return short_ > 0
+                ? trailId + " - " + cost + " tokens (need " + short_ + " more)"
+                : trailId + " - " + cost + " tokens";
+    }
+
+    private HyUIStyle rowStyle(SupporterService service, UUID uuid, String trailId) {
+        int cost = plugin.config().trailCost(trailId);
+        if (cost <= 0 || service.unlocks(uuid).contains(trailId)) {
+            return theme.coloured(SupporterTheme.INK_GOOD, false);
+        }
+        return service.tokenBalance(uuid) >= cost
+                ? theme.body()
+                : theme.coloured(SupporterTheme.INK_LOCKED, false);
     }
 
     private UIElementBuilder<?> aboutTab() {
