@@ -973,20 +973,32 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                                PlayerRef player, World world) {
             String texture = String.valueOf(ctx.get(textureArg)).trim();
-            boolean reset = texture.equalsIgnoreCase("reset");
 
             // Handed to the world thread even though this may already be on it: component reads
             // and writes are world-thread only, and being explicit costs nothing.
             world.execute(() -> {
                 try {
-                    CapeSpike.Result result =
-                            CapeSpike.apply(store, ref, reset ? null : texture);
+                    // "list" changes nothing and prints what the player is wearing. "noop"
+                    // rebuilds the model identically and pushes it, which separates "the rebuild
+                    // is lossy" from "the cape disturbs the other attachments" — the two
+                    // remaining explanations for the character changing.
+                    if (texture.equalsIgnoreCase("list")) {
+                        ok(ctx, "capetest: your live model");
+                        for (String line : CapeSpike.describe(store, ref)) {
+                            info(ctx, line);
+                        }
+                        plugin.log().info("capetest list: "
+                                + String.join(" | ", CapeSpike.describe(store, ref)));
+                        return;
+                    }
+
+                    CapeSpike.Result result = texture.equalsIgnoreCase("noop")
+                            ? CapeSpike.rebuildUnchanged(store, ref)
+                            : CapeSpike.apply(store, ref,
+                                    texture.equalsIgnoreCase("reset") ? null : texture);
+
                     if (result.applied()) {
                         ok(ctx, "capetest: " + result.detail());
-                        info(ctx, reset
-                                ? "Third person to confirm it is gone."
-                                : "Third person, then say which: a cape, nothing at all, or "
-                                        + "part of your character replaced.");
                     } else {
                         err(ctx, "capetest failed: " + result.detail());
                     }

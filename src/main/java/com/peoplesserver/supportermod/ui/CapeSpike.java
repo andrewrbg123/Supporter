@@ -10,7 +10,9 @@ import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A throwaway experiment to answer one question: does adding a {@link ModelAttachment} to a
@@ -51,6 +53,63 @@ public final class CapeSpike {
 
     /** What happened, for reporting back to whoever ran the command. */
     public record Result(boolean applied, String detail) { }
+
+    /**
+     * Describes the model the player is wearing, changing nothing.
+     *
+     * <p>Appending to the live model still changed the whole character, which rules out the first
+     * theory (that regenerating from the skin was the problem). Before theorising again: look at
+     * what the attachments actually ARE. If they turn out to be the player's clothing, adding a
+     * sixth should not disturb them, and the fault is in the rebuild. If they carry weights that
+     * imply selection, it is the opposite.
+     */
+    public static List<String> describe(Store<EntityStore> store, Ref<EntityStore> ref) {
+        List<String> out = new ArrayList<>();
+        ModelComponent component = store.getComponent(ref, ModelComponent.getComponentType());
+        if (component == null || component.getModel() == null) {
+            out.add("no ModelComponent");
+            return out;
+        }
+        Model model = component.getModel();
+        out.add("asset=" + model.getModelAssetId() + " model=" + model.getModel()
+                + " texture=" + model.getTexture());
+        out.add("gradientSet=" + model.getGradientSet() + " gradientId=" + model.getGradientId()
+                + " scale=" + model.getScale());
+        out.add("randomAttachmentIds=" + model.getRandomAttachmentIds());
+        ModelAttachment[] attachments = model.getAttachments();
+        if (attachments == null) {
+            out.add("attachments=null");
+            return out;
+        }
+        out.add(attachments.length + " attachment(s):");
+        for (int i = 0; i < attachments.length; i++) {
+            ModelAttachment a = attachments[i];
+            out.add("  [" + i + "] " + (a == null ? "null"
+                    : a.getModel() + " tex=" + a.getTexture()
+                            + " gset=" + a.getGradientSet() + " gid=" + a.getGradientId()
+                            + " w=" + a.getWeight()));
+        }
+        return out;
+    }
+
+    /**
+     * Rebuilds the live model with no change at all and pushes it.
+     *
+     * <p>The control experiment. If the character still changes after this, the fault is in
+     * copying and re-sending a model — not in the cape — and no amount of tuning the attachment
+     * will help.
+     */
+    public static Result rebuildUnchanged(Store<EntityStore> store, Ref<EntityStore> ref) {
+        ModelComponent component = store.getComponent(ref, ModelComponent.getComponentType());
+        if (component == null || component.getModel() == null) {
+            return new Result(false, "no ModelComponent to rebuild");
+        }
+        Model model = component.getModel();
+        store.putComponent(ref, ModelComponent.getComponentType(),
+                new ModelComponent(rebuild(model, model.getAttachments())));
+        return new Result(true, "rebuilt the live model with NO changes - if your character still "
+                + "changed, the fault is the rebuild, not the cape");
+    }
 
     /**
      * Rebuilds the player's model with one extra attachment.
