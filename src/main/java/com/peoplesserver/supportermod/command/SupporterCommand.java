@@ -777,16 +777,41 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      * variants are trivial once the bone attachment and scale are proven in game.
      */
     public static final class HatSub extends PublicPlayerCommand {
-        /** Matches Server/Item/Items/Armor/Supporter_Crown.json in our asset pack. */
-        static final String CROWN_ITEM_ID = "Supporter_Crown";
 
-        private final SupporterPlugin plugin;
+        /** Hat name → item id, matching Server/Item/Items/Armor/ in our asset pack. */
+        static final java.util.Map<String, String> HATS = new java.util.LinkedHashMap<>();
+
+        static {
+            HATS.put("crown", "Supporter_Crown");
+            HATS.put("cowboy", "Supporter_Hat_Cowboy");
+        }
 
         public HatSub(SupporterPlugin plugin) {
-            super("hat", "Get your Supporter Crown (again, if you lost it).");
+            super("hat", "Your supporter hats: " + String.join(", ", HATS.keySet()));
             setPermissionGroup(GameMode.Adventure);
-            addAliases(new String[] {"crown"});
+            addAliases(new String[] {"hats", "crown"});
+            addUsageVariant(new HatDesignVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            ok(ctx, "Hats: " + String.join(", ", HATS.keySet()));
+            info(ctx, "/supporter hat <name> to get one.");
+        }
+    }
+
+    /** The {@code /supporter hat <name>} form. */
+    public static final class HatDesignVariant extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument nameArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public HatDesignVariant(SupporterPlugin plugin) {
+            super("Get a supporter hat.");
+            setPermissionGroup(GameMode.Adventure);
             this.plugin = plugin;
+            this.nameArg = withRequiredArg("hat", "hat name", (ArgumentType) ArgTypes.STRING);
         }
 
         @Override
@@ -797,23 +822,28 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             if (!service.isSupporter(player.getUuid())) {
-                err(ctx, "The crown is a supporter perk. /supporter info to find out more.");
+                err(ctx, "Hats are a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            String name = String.valueOf(ctx.get(nameArg)).trim().toLowerCase();
+            String itemId = HatSub.HATS.get(name);
+            if (itemId == null) {
+                err(ctx, "No such hat. Choose from: " + String.join(", ", HatSub.HATS.keySet()));
                 return;
             }
             try {
-                ItemStackTransaction tx =
-                        Player.giveItem(new ItemStack(CROWN_ITEM_ID, 1), ref, store);
+                ItemStackTransaction tx = Player.giveItem(new ItemStack(itemId, 1), ref, store);
                 ItemStack remainder = tx == null ? null : tx.getRemainder();
                 if (remainder != null && !remainder.isEmpty()) {
                     err(ctx, "No room in your inventory — clear a slot and try again.");
                     return;
                 }
-                ok(ctx, "Supporter Crown delivered. Wear it in your head slot.");
+                ok(ctx, "Supporter hat (" + name + ") delivered. Wear it in your head slot.");
                 info(ctx, "It gives no protection at all, so take it off before a fight. "
-                        + "Lost it? Run this again, as often as you like.");
+                        + "Lost it, or want the other one? Run this again any time.");
             } catch (Throwable t) {
-                err(ctx, "Could not deliver the crown: " + t.getMessage());
-                plugin.log().error("Crown delivery failed for " + player.getUuid(), t);
+                err(ctx, "Could not deliver the hat: " + t.getMessage());
+                plugin.log().error("Hat delivery failed for " + player.getUuid(), t);
             }
         }
     }
