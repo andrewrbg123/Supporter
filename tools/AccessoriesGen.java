@@ -6,17 +6,20 @@ import java.io.File;
 import javax.imageio.ImageIO;
 
 /**
- * Generates textures and icons for the three accessory models: shades, chain, earrings.
+ * Generates the texture and icon for the shades model — the one survivor of a three-accessory
+ * batch.
  *
  * <p>Run with: {@code java tools/AccessoriesGen.java src/main/resources}
  *
- * <p>All three are static boxes on the proven Head/Chest bone anchors — no new bones, which is
- * why they shipped as one batch where the trainers (new animated bones) went alone. Each model's
- * per-face UV offsets mirror the layouts painted here.
+ * <p><b>Why the chain and earrings were built, live-tested and DROPPED - the lesson:</b>
+ * body-hugging accessories are skin-dependent. The chain hung at a fixed offset from the Chest
+ * bone, but what occupies that space varies per player - cosmetic overtops are extra geometry
+ * layered over the body, and the chain sat inside the test player jacket with its medallion
+ * peeking out at belt height. Ear TYPES vary the same way, so fixed-offset hoops sat inside
+ * pointed ears and would float beside round ones. Things that sit ON TOP of everything - hats,
+ * capes, shoes, glasses - fit every skin; things that hug the body fit exactly one.
  *
- * <p>Shades: black lenses with a glint, amber frame and temples. Chain and earrings: gold — the
- * supporter amber family — with a crown-marked medallion, matching the cape emblem, hat buckle
- * and trainer stripe.
+ * <p>Shades: black lenses with a glint, amber frame and temples, matching the supporter accent.
  */
 public final class AccessoriesGen {
 
@@ -35,10 +38,6 @@ public final class AccessoriesGen {
         String root = args.length > 0 ? args[0] : "src/main/resources";
         write(shadesTexture(), new File(root, "Common/Items/Armor/Supporter_Shades.png"));
         write(shadesIcon(), new File(root, "Common/Icons/ItemsGenerated/Supporter_Shades.png"));
-        write(chainTexture(), new File(root, "Common/Items/Armor/Supporter_Chain.png"));
-        write(chainIcon(), new File(root, "Common/Icons/ItemsGenerated/Supporter_Chain.png"));
-        write(earringsTexture(), new File(root, "Common/Items/Armor/Supporter_Earrings.png"));
-        write(earringsIcon(), new File(root, "Common/Icons/ItemsGenerated/Supporter_Earrings.png"));
         System.out.println("done");
     }
 
@@ -96,119 +95,6 @@ public final class AccessoriesGen {
         }
         g.setColor(FRAME);
         g.fillRect(28, 27, 8, 3);
-
-        g.dispose();
-        return img;
-    }
-
-    // --- chain ----------------------------------------------------------------------------
-    // strands 2x7 @(1,1), tops 2x2 @(4,1); bar front 14x2 @(1,9), ends 2x2 @(16,9),
-    // top/bottom 14x2 @(1,12); medallion front 6x7 @(1,15), sides 2x7 @(8,15),
-    // top/bottom 6x2 @(11,15)
-
-    private static BufferedImage chainTexture() {
-        BufferedImage img = new BufferedImage(TEX, TEX, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
-
-        // Strands: gold with link ticks so they read as chain, not rod.
-        g.setColor(GOLD);
-        g.fillRect(1, 1, 2, 7);
-        g.setColor(GOLD_DEEP);
-        for (int y = 2; y < 8; y += 2) {
-            g.fillRect(1, y, 2, 1);
-        }
-        g.setColor(GOLD);
-        g.fillRect(4, 1, 2, 2);
-
-        // Bar: gold with the same link ticks.
-        g.setColor(GOLD);
-        g.fillRect(1, 9, 14, 2);
-        g.setColor(GOLD_DEEP);
-        for (int x = 2; x < 15; x += 2) {
-            g.fillRect(x, 9, 1, 2);
-        }
-        g.setColor(GOLD);
-        g.fillRect(16, 9, 2, 2);
-        g.fillRect(1, 12, 14, 2);
-
-        // Medallion: gold plate, darker rim, ruby centre.
-        g.setColor(GOLD);
-        g.fillRect(1, 15, 6, 7);
-        g.setColor(GOLD_DEEP);
-        g.drawRect(1, 15, 5, 6);
-        g.setColor(RUBY);
-        g.fillRect(3, 18, 2, 2);
-        g.setColor(GOLD);
-        g.fillRect(8, 15, 2, 7);
-        g.fillRect(11, 15, 6, 2);
-
-        g.dispose();
-        return img;
-    }
-
-    private static BufferedImage chainIcon() {
-        BufferedImage img = new BufferedImage(ICON, ICON, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-
-        // A necklace U with chunky links and a medallion at the bottom.
-        g.setColor(GOLD);
-        for (int i = 0; i < 7; i++) {
-            g.fillRect(12 + (i * 2), 14 + (i * 3), 3, 3);
-            g.fillRect(49 - (i * 2), 14 + (i * 3), 3, 3);
-        }
-        g.fillRect(26, 35, 12, 3);
-        g.setColor(GOLD_DEEP);
-        g.fillRect(26, 37, 12, 1);
-        // Medallion.
-        g.setColor(GOLD);
-        g.fillRect(26, 38, 12, 14);
-        g.setColor(GOLD_DEEP);
-        g.drawRect(26, 38, 11, 13);
-        g.setColor(RUBY);
-        g.fillRect(30, 43, 4, 4);
-
-        g.dispose();
-        return img;
-    }
-
-    // --- earrings -------------------------------------------------------------------------
-    // hoop faces 1..2 wide x5 @(1,1); tops 2x2 @(4,1); (7,1) top/bottom strip
-
-    private static BufferedImage earringsTexture() {
-        BufferedImage img = new BufferedImage(TEX, TEX, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
-
-        // Hoop faces: gold with a darker middle row, so the box reads as a ring with a gap
-        // rather than a solid tag.
-        g.setColor(GOLD);
-        g.fillRect(1, 1, 2, 5);
-        g.setColor(GOLD_DARK);
-        g.fillRect(1, 3, 2, 1);
-        g.setColor(GOLD);
-        g.fillRect(4, 1, 2, 2);
-        g.fillRect(7, 1, 2, 2);
-
-        g.dispose();
-        return img;
-    }
-
-    private static BufferedImage earringsIcon() {
-        BufferedImage img = new BufferedImage(ICON, ICON, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-
-        // Two hoops side by side.
-        for (int side = 0; side < 2; side++) {
-            int x0 = 12 + (side * 26);
-            g.setColor(GOLD);
-            g.fillRect(x0, 18, 14, 4);
-            g.fillRect(x0, 18, 4, 26);
-            g.fillRect(x0 + 10, 18, 4, 26);
-            g.fillRect(x0, 40, 14, 4);
-            g.setColor(GOLD_DEEP);
-            g.fillRect(x0, 43, 14, 1);
-        }
 
         g.dispose();
         return img;
