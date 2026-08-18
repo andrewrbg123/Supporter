@@ -53,10 +53,15 @@ public final class SupporterPanel {
     private static final String ROOT_ID = "SupporterRoot";
     private static final String TABS_ID = "SupporterTabs";
 
-    private static final int WIDTH = 520;
-    private static final int HEIGHT = 380;
-    private static final int PAD = 18;
-    private static final int ROW_HEIGHT = 20;
+    private static final int WIDTH = 720;
+    private static final int HEIGHT = 520;
+    private static final int PAD = 24;
+    private static final int ROW_HEIGHT = 24;
+
+    /** Tab hit area. Text-only tabs were too small a target on the first live build. */
+    private static final int TAB_WIDTH = 150;
+    private static final int TAB_HEIGHT = 36;
+    private static final int TAB_SPACING = 12;
 
     private final SupporterPlugin plugin;
     private final SupporterTheme theme;
@@ -107,13 +112,13 @@ public final class SupporterPanel {
     private UIElementBuilder<?> header(SupporterService service, UUID uuid) {
         GroupBuilder header = (GroupBuilder) GroupBuilder.group()
                 .withId("SupHeader")
-                .withAnchor(new HyUIAnchor().setTop(0).setLeft(0).setWidth(WIDTH).setHeight(52))
+                .withAnchor(new HyUIAnchor().setTop(0).setLeft(0).setWidth(WIDTH).setHeight(62))
                 .withBackground(theme.headerBackground());
 
         header = (GroupBuilder) header.addChild(text("SupTitle", "Supporter",
-                theme.title(), 10, PAD, WIDTH - (PAD * 2), 24));
+                theme.title(), 12, PAD, WIDTH - (PAD * 2), 30));
         header = (GroupBuilder) header.addChild(text("SupSubtitle", subtitle(service, uuid),
-                theme.dim(), 32, PAD, WIDTH - (PAD * 2), 16));
+                theme.dim(), 40, PAD, WIDTH - (PAD * 2), 18));
         return header;
     }
 
@@ -125,18 +130,37 @@ public final class SupporterPanel {
         return service.status(uuid) + " - " + service.daysRemaining(uuid) + " day(s) remaining";
     }
 
+    /**
+     * The tab strip.
+     *
+     * <p>Each tab supplies its own {@link CustomButtonBuilder} rather than relying on the default
+     * text-only tab. The first live build used plain labels and they were hard to hit: the target
+     * was the width of the word itself, with no visible edge telling you where to aim. A button
+     * gives a {@value #TAB_WIDTH}×{@value #TAB_HEIGHT} target with hover and pressed art, so the
+     * tab looks clickable and behaves like every other button in the game.
+     */
     private UIElementBuilder<?> tabBar() {
         return TabNavigationBuilder.tabNavigation()
                 .withSelectedTab("status")
                 .withSelectedTabStyle(theme.selectedTab())
                 .withUnselectedTabStyle(theme.unselectedTab())
-                .withTabSpacing(8)
-                .addTab("status", "Status")
-                .addTab("perks", "Perks")
-                .addTab("about", "About")
+                .withTabSpacing(TAB_SPACING)
+                .addTab("status", "Status", tabButton("status"))
+                .addTab("perks", "Perks", tabButton("perks"))
+                .addTab("about", "About", tabButton("about"))
                 .withId(TABS_ID)
-                .withAnchor(new HyUIAnchor().setTop(60).setLeft(PAD)
-                        .setWidth(WIDTH - (PAD * 2)).setHeight(26));
+                .withAnchor(new HyUIAnchor().setTop(62).setLeft(PAD)
+                        .setWidth(WIDTH - (PAD * 2)).setHeight(TAB_HEIGHT));
+    }
+
+    private CustomButtonBuilder tabButton(String tabId) {
+        CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
+                .withId("SupTab_" + tabId)
+                .withAnchor(new HyUIAnchor().setWidth(TAB_WIDTH).setHeight(TAB_HEIGHT));
+        return button
+                .withDefaultBackground(theme.tabBackground())
+                .withHoveredBackground(theme.tabHovered())
+                .withPressedBackground(theme.tabPressed());
     }
 
     // --- tabs -----------------------------------------------------------------------------
@@ -146,8 +170,8 @@ public final class SupporterPanel {
                 .withTabNavigationId(TABS_ID)
                 .withTabId(tabId)
                 .withId("SupContent_" + tabId)
-                .withAnchor(new HyUIAnchor().setTop(96).setLeft(PAD)
-                        .setWidth(WIDTH - (PAD * 2)).setHeight(HEIGHT - 130));
+                .withAnchor(new HyUIAnchor().setTop(118).setLeft(PAD)
+                        .setWidth(WIDTH - (PAD * 2)).setHeight(HEIGHT - 150));
     }
 
     private UIElementBuilder<?> statusTab(SupporterService service, UUID uuid) {

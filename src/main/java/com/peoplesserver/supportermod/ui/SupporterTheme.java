@@ -26,7 +26,13 @@ public final class SupporterTheme {
     /** Vanilla nine-patch used for the title strip at the top of a popup. */
     private static final String TEX_HEADER = "Common/PopupTitle.png";
 
+    /** Vanilla button nine-patches, used for the tab strip. */
+    private static final String TEX_TAB = "Common/Buttons/Secondary.png";
+    private static final String TEX_TAB_HOVERED = "Common/Buttons/Secondary_Hovered.png";
+    private static final String TEX_TAB_PRESSED = "Common/Buttons/Secondary_Pressed.png";
+
     private static final int PANEL_BORDER = 16;
+    private static final int BUTTON_BORDER = 12;
     private static final int HEADER_BORDER = 12;
 
     /** Body text: readable against the dark panel without competing with the accent. */
@@ -53,17 +59,34 @@ public final class SupporterTheme {
         return new HyUIPatchStyle().setTexturePath(TEX_PANEL).setBorder(PANEL_BORDER);
     }
 
-    /** The header strip, tinted with the accent so the panel reads as "supporter" at a glance. */
+    /**
+     * The header strip.
+     *
+     * <p>Deliberately NOT tinted with the accent. The first live build tinted it, and the vanilla
+     * title texture has enough internal detail that an amber multiply turned it into a muddy
+     * mottle. The accent belongs on the title text, where it reads cleanly against the dark
+     * plate; the strip just needs to separate the header from the body.
+     */
     public HyUIPatchStyle headerBackground() {
-        return new HyUIPatchStyle()
-                .setTexturePath(TEX_HEADER)
-                .setBorder(HEADER_BORDER)
-                .setColor(accent);
+        return new HyUIPatchStyle().setTexturePath(TEX_HEADER).setBorder(HEADER_BORDER);
+    }
+
+    /** Tab buttons, so a tab is a target you can hit rather than a word you must land on. */
+    public HyUIPatchStyle tabBackground() {
+        return new HyUIPatchStyle().setTexturePath(TEX_TAB).setBorder(BUTTON_BORDER);
+    }
+
+    public HyUIPatchStyle tabHovered() {
+        return new HyUIPatchStyle().setTexturePath(TEX_TAB_HOVERED).setBorder(BUTTON_BORDER);
+    }
+
+    public HyUIPatchStyle tabPressed() {
+        return new HyUIPatchStyle().setTexturePath(TEX_TAB_PRESSED).setBorder(BUTTON_BORDER);
     }
 
     public HyUIStyle title() {
         return new HyUIStyle()
-                .setFontSize(20f)
+                .setFontSize(26f)
                 .setRenderBold(true)
                 .setRenderUppercase(true)
                 .setLetterSpacing(2)
@@ -72,26 +95,26 @@ public final class SupporterTheme {
     }
 
     public HyUIStyle heading() {
-        return new HyUIStyle().setFontSize(15f).setRenderBold(true).setTextColor(accent);
+        return new HyUIStyle().setFontSize(17f).setRenderBold(true).setTextColor(accent);
     }
 
     public HyUIStyle body() {
-        return new HyUIStyle().setFontSize(13f).setTextColor(INK_BODY).setWrap(true);
+        return new HyUIStyle().setFontSize(15f).setTextColor(INK_BODY).setWrap(true);
     }
 
     public HyUIStyle dim() {
-        return new HyUIStyle().setFontSize(12f).setTextColor(INK_DIM).setWrap(true);
+        return new HyUIStyle().setFontSize(14f).setTextColor(INK_DIM).setWrap(true);
     }
 
     public HyUIStyle coloured(String hex, boolean bold) {
-        return new HyUIStyle().setFontSize(13f).setRenderBold(bold).setTextColor(hex).setWrap(true);
+        return new HyUIStyle().setFontSize(15f).setRenderBold(bold).setTextColor(hex).setWrap(true);
     }
 
     public HyUIStyle selectedTab() {
-        return new HyUIStyle().setFontSize(13f).setRenderBold(true).setTextColor(accent);
+        return new HyUIStyle().setFontSize(15f).setRenderBold(true).setTextColor(accent);
     }
 
     public HyUIStyle unselectedTab() {
-        return new HyUIStyle().setFontSize(13f).setTextColor(INK_DIM);
+        return new HyUIStyle().setFontSize(15f).setTextColor(INK_DIM);
     }
 }
