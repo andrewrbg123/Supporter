@@ -10,6 +10,9 @@ import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgumentType;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
 import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.transaction.ItemStackTransaction;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -69,6 +72,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new TrailSub(plugin));
         addSubCommand(new TrailsVisibilitySub(plugin));
         addSubCommand(new PerksSub(plugin));
+        addSubCommand(new CapeSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
@@ -644,6 +648,62 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                         + "left.");
             } else {
                 info(ctx, "  /supporter perks for the full list, /supporter status for your own.");
+            }
+        }
+    }
+
+    // --- /supporter cape ----------------------------------------------------------------------
+
+    /**
+     * {@code /supporter cape} — hands the supporter cape to an active supporter.
+     *
+     * <p><b>Re-issuable on purpose.</b> A cape is an item, so it can be dropped, lost on death or
+     * left in a chest, and the standing rule here is that nobody loses what they paid for. So the
+     * entitlement is the record of truth and this command mints a fresh one whenever it is asked.
+     * There is no counter and nothing to run out: losing it costs the player nothing but the walk
+     * back.
+     *
+     * <p>It is a chest-slot armour piece with zero damage resistance — no combat advantage, and
+     * wearing it means wearing no chest armour. That trade-off is the whole design: it is a
+     * cosmetic to be seen in, not an edge in a fight.
+     */
+    public static final class CapeSub extends PublicPlayerCommand {
+        /** Matches the id of Server/Item/Items/Armor/Cloak/Supporter_Cape.json in our asset pack. */
+        static final String CAPE_ITEM_ID = "Supporter_Cape";
+
+        private final SupporterPlugin plugin;
+
+        public CapeSub(SupporterPlugin plugin) {
+            super("cape", "Get your supporter cape (again, if you lost it).");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(player.getUuid())) {
+                err(ctx, "The cape is a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            try {
+                ItemStack stack = new ItemStack(CAPE_ITEM_ID, 1);
+                ItemStackTransaction tx = Player.giveItem(stack, ref, store);
+                ItemStack remainder = tx == null ? null : tx.getRemainder();
+                if (remainder != null && !remainder.isEmpty()) {
+                    err(ctx, "No room in your inventory — clear a slot and try again.");
+                    return;
+                }
+                ok(ctx, "Supporter cape delivered. Wear it in your chest slot.");
+                info(ctx, "It gives no protection at all, so take it off before a fight. "
+                        + "Lost it? Run this again, as often as you like.");
+            } catch (Throwable t) {
+                err(ctx, "Could not deliver the cape: " + t.getMessage());
+                plugin.log().error("Cape delivery failed for " + player.getUuid(), t);
             }
         }
     }
