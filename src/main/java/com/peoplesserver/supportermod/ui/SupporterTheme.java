@@ -110,6 +110,35 @@ public final class SupporterTheme {
         return new HyUIStyle().setFontSize(15f).setRenderBold(bold).setTextColor(hex).setWrap(true);
     }
 
+    /**
+     * Button labels. Explicit, because CustomButtonBuilder default label style is large,
+     * bold and uppercase — at our button widths anything longer than about four characters
+     * truncated to "STA...". Shrink-to-fit keeps the whole word visible instead.
+     */
+    public HyUIStyle buttonLabel() {
+        return new HyUIStyle()
+                .setFontSize(13f)
+                .setRenderBold(true)
+                .setShrinkTextToFit(true)
+                .setMinShrinkTextToFitFontSize(8f)
+                .setWrap(false)
+                .setTextColor(INK_BODY)
+                .setAlignment(Alignment.Center);
+    }
+
+    /** Colour swatch labels: like buttonLabel but in the swatch's own colour. NO wrap — the
+     * first build reused the body style, whose wrap=true folded "#FFAA00" onto two lines. */
+    public HyUIStyle swatchLabel(String hex) {
+        return new HyUIStyle()
+                .setFontSize(12f)
+                .setRenderBold(true)
+                .setShrinkTextToFit(true)
+                .setMinShrinkTextToFitFontSize(8f)
+                .setWrap(false)
+                .setTextColor(hex)
+                .setAlignment(Alignment.Center);
+    }
+
     public HyUIStyle selectedTab() {
         return new HyUIStyle().setFontSize(15f).setRenderBold(true).setTextColor(accent);
     }

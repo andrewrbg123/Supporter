@@ -189,6 +189,9 @@ public final class SupporterPanel {
                 .withId("SupTab_" + tabId)
                 .withAnchor(new HyUIAnchor().setWidth(TAB_WIDTH).setHeight(TAB_HEIGHT));
         return button
+                .withDefaultLabelStyle(theme.buttonLabel())
+                .withHoveredLabelStyle(theme.buttonLabel())
+                .withPressedLabelStyle(theme.buttonLabel())
                 .withDefaultBackground(theme.tabBackground())
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
@@ -534,8 +537,11 @@ public final class SupporterPanel {
                                              int top) {
         CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
                 .withId(TRAIL_TOGGLE_ID)
-                .withAnchor(new HyUIAnchor().setTop(top).setLeft(0).setWidth(230).setHeight(BUY_HEIGHT));
+                .withAnchor(new HyUIAnchor().setTop(top).setLeft(0).setWidth(280).setHeight(BUY_HEIGHT));
         button = button.withText(toggleText(service, uuid))
+                .withDefaultLabelStyle(theme.buttonLabel())
+                .withHoveredLabelStyle(theme.buttonLabel())
+                .withPressedLabelStyle(theme.buttonLabel())
                 .withDefaultBackground(theme.tabBackground())
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
@@ -702,7 +708,9 @@ public final class SupporterPanel {
                                     .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
             String chosen = hex;
             swatch = swatch.withText(hex)
-                    .withDefaultLabelStyle(theme.coloured(hex, true))
+                    .withDefaultLabelStyle(theme.swatchLabel(hex))
+                    .withHoveredLabelStyle(theme.swatchLabel(hex))
+                    .withPressedLabelStyle(theme.swatchLabel(hex))
                     .withDefaultBackground(theme.tabBackground())
                     .withHoveredBackground(theme.tabHovered())
                     .withPressedBackground(theme.tabPressed());
@@ -797,6 +805,9 @@ public final class SupporterPanel {
                 .withAnchor(new HyUIAnchor().setTop(top).setLeft(left)
                         .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
         button = button.withText(text)
+                .withDefaultLabelStyle(theme.buttonLabel())
+                .withHoveredLabelStyle(theme.buttonLabel())
+                .withPressedLabelStyle(theme.buttonLabel())
                 .withDefaultBackground(theme.tabBackground())
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
