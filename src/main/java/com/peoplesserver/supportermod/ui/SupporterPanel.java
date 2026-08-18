@@ -260,6 +260,8 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("PkTrails",
                 "Particle trails - " + config.trails().size() + " to choose from",
                 theme.body(), row++));
+        tab = (TabContentBuilder) tab.addChild(line("PkCape",
+                "A supporter cape - 6 designs, /supporter cape", theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkHomes",
                 "Homes: " + config.supporterHomeSlots()
                         + " instead of " + config.defaultHomeSlots(), theme.body(), row++));

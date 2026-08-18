@@ -6,116 +6,177 @@ import java.io.File;
 import javax.imageio.ImageIO;
 
 /**
- * Generates the supporter cape texture and its inventory icon.
+ * Generates the supporter cape textures and their inventory icons — one per design.
  *
  * <p>Run with: {@code java tools/CapeTextureGen.java src/main/resources}
  *
- * <p><b>96x96, because that is what the cape geometry expects.</b> The item points at the vanilla
+ * <p><b>96x96, because that is what the cape geometry expects.</b> The items point at the vanilla
  * {@code Items/Back/Cape_Long.blockymodel} — geometry that already ships with every client, so no
- * modelling is needed and nothing of anyone else's art is redistributed. Its texture sheet is
- * 96x96; a different size would map somewhere unpredictable.
+ * modelling is needed and nothing of anyone else's art is redistributed. It has to live under
+ * {@code Items/} specifically: the asset validator rejects an item whose model is outside
+ * [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/], and a rejected asset does not degrade —
+ * it aborts the entire server boot.
  *
- * <p>It has to live under {@code Items/} specifically: the asset validator rejects an item whose
- * model is outside [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/], and a rejected asset
- * does not degrade — it aborts the entire server boot.
+ * <p><b>The emblem is placed from the model's real UV map, not guessed.</b> Walking the
+ * blockymodel's quads gives exactly three visible segments:
  *
- * <p><b>Deliberately near-uniform.</b> Without the UV map, any detail placed at a specific spot
- * lands somewhere unknown on the cape. A vertical gradient with an edge trim reads as intentional
- * wherever the seams fall, which is the right first version: get it in game, see where the faces
- * actually are, then decorate. Drawing an emblem before knowing the UVs is how you get a crest on
- * the inside of a hem.
+ * <pre>
+ * Cape1  36x35 at (40,10)   — the main back panel
+ * Cape2  43x26 at (43,45)   — middle sway segment
+ * Cape3  44x24 at (44,71)   — bottom sway segment
+ * </pre>
  *
- * <p>Colours come from the server's own palette rather than being invented — the amber matches
- * {@code tagColorHex}, so the cape, the chat tag and the panel are the same colour by intent.
+ * <p>So the crown is centred in Cape1, which is the upper back. Nothing samples the sheet above
+ * y=10 or left of x=40 — which is how the first version's "highlight line" at y=6 turned out to
+ * be invisible in game. Decorating outside the mapped regions decorates nothing.
+ *
+ * <p><b>Six designs, one per allowed chat colour.</b> The palette comes from the plugin's own
+ * {@code allowedChatColors} rather than being invented, so a supporter can match their cape to
+ * their chat colour and the two systems stay one family: amber, frost, rose, jade, gold, ember.
  */
 public final class CapeTextureGen {
 
-    /**
-     * 96x96, matching Items/Back/Cape_Long_Texture.png.
-     *
-     * <p>The size is dictated by the geometry we point at, not chosen. Get it wrong and the UVs
-     * map somewhere unintended.
-     */
+    /** Dictated by Cape_Long.blockymodel's texture sheet. Not a choice. */
     private static final int TEX_W = 96;
     private static final int TEX_H = 96;
     private static final int ICON = 64;
 
-    /** Same amber as tagColorHex, the chat tag and the supporter panel accent. */
-    private static final Color AMBER = new Color(0xFF, 0xAA, 0x00);
-    private static final Color AMBER_DEEP = new Color(0xC9, 0x7C, 0x2A);
-    private static final Color TRIM = new Color(0x4A, 0x33, 0x12);
-    private static final Color HIGHLIGHT = new Color(0xFF, 0xD1, 0x6B);
+    /** The main back panel's UV region, read from the model. */
+    private static final int PANEL_X = 40;
+    private static final int PANEL_Y = 10;
+    private static final int PANEL_W = 36;
+    private static final int PANEL_H = 35;
+
+    /**
+     * The crown, 13x9 cells, drawn at scale 2 (26x18 pixels) on the back panel. Outlined dark and
+     * filled bright, so it reads against every base colour.
+     */
+    private static final String[] CROWN = {
+        "X.....X.....X",
+        "X.....X.....X",
+        "XX...XXX...XX",
+        "XXX.XXXXX.XXX",
+        "XXXXXXXXXXXXX",
+        "XXXXXXXXXXXXX",
+        ".XXXXXXXXXXX.",
+        ".XXXXXXXXXXX.",
+        ".XXXXXXXXXXX.",
+    };
+
+    /** name, base (light) colour, deep colour. Bases are the six allowedChatColors. */
+    private record Design(String name, Color light, Color deep) { }
+
+    private static final Design[] DESIGNS = {
+        // Amber keeps the original file name (no suffix) so capes already in players' inventories
+        // keep resolving — an item id, once in the wild, is permanent.
+        new Design("amber", new Color(0xFFAA00), new Color(0xC97C2A)),
+        new Design("frost", new Color(0x55FFFF), new Color(0x2A7C9C)),
+        new Design("rose", new Color(0xFF55FF), new Color(0x9C2A8C)),
+        new Design("jade", new Color(0x55FF55), new Color(0x2A9C4A)),
+        new Design("gold", new Color(0xFFFF55), new Color(0xC9A82A)),
+        new Design("ember", new Color(0xFF5555), new Color(0x9C2A2A)),
+    };
 
     public static void main(String[] args) throws Exception {
         String root = args.length > 0 ? args[0] : "src/main/resources";
-        write(texture(), new File(root, "Common/Items/Armor/Supporter_Cape.png"));
-        write(icon(), new File(root, "Common/Icons/ItemsGenerated/Supporter_Cape.png"));
+        for (Design d : DESIGNS) {
+            String suffix = d.name.equals("amber") ? "" : "_" + cap(d.name);
+            write(texture(d), new File(root, "Common/Items/Armor/Supporter_Cape" + suffix + ".png"));
+            write(icon(d), new File(root, "Common/Icons/ItemsGenerated/Supporter_Cape" + suffix + ".png"));
+        }
         System.out.println("done");
     }
 
-    private static BufferedImage texture() {
+    private static BufferedImage texture(Design d) {
+        Color trim = mix(d.deep, Color.BLACK, 0.55f);
+        Color highlight = mix(d.light, Color.WHITE, 0.45f);
+
         BufferedImage img = new BufferedImage(TEX_W, TEX_H, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
 
-        // Vertical gradient, light at the shoulders and deep at the hem. Painted pixel rows
-        // rather than with GradientPaint so the result is exact and does not depend on
-        // interpolation settings.
+        // Vertical gradient, light at the shoulders and deep at the hem, spanning the full sheet
+        // so all three cape segments shade continuously.
         for (int y = 0; y < TEX_H; y++) {
             float t = (float) y / (TEX_H - 1);
-            g.setColor(mix(AMBER, AMBER_DEEP, t));
+            g.setColor(mix(d.light, d.deep, t));
             g.fillRect(0, y, TEX_W, 1);
         }
 
-        // Two-pixel trim around the whole sheet. Every face of the cape borders the sheet edge
-        // somewhere, so this reads as a hem no matter how the UVs are arranged.
-        g.setColor(TRIM);
-        g.fillRect(0, 0, TEX_W, 2);
+        // Hem: the bottom two rows fall inside Cape3's UV region, so this renders as a dark
+        // band along the bottom edge of the cape.
+        g.setColor(trim);
         g.fillRect(0, TEX_H - 2, TEX_W, 2);
-        g.fillRect(0, 0, 2, TEX_H);
-        g.fillRect(TEX_W - 2, 0, 2, TEX_H);
 
-        // A single highlight line near the top, so the cape is not a flat wash of colour.
-        g.setColor(HIGHLIGHT);
-        g.fillRect(2, 6, TEX_W - 4, 1);
+        // Collar accent: the top row of Cape1's region — the only "top" that is actually mapped.
+        g.setColor(highlight);
+        g.fillRect(PANEL_X, PANEL_Y + 1, PANEL_W, 1);
+
+        drawCrown(g, PANEL_X + (PANEL_W - CROWN[0].length() * 2) / 2,
+                PANEL_Y + (PANEL_H - CROWN.length * 2) / 2 + 1, 2, trim, highlight);
 
         g.dispose();
         return img;
     }
 
-    private static BufferedImage icon() {
+    private static BufferedImage icon(Design d) {
+        Color trim = mix(d.deep, Color.BLACK, 0.55f);
+        Color highlight = mix(d.light, Color.WHITE, 0.45f);
+
         BufferedImage img = new BufferedImage(ICON, ICON, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 
-        // A cape silhouette: narrow at the collar, wider at the hem, with a notch cut out of the
-        // bottom. Blocky on purpose — antialiasing off, so it sits alongside the game's own icons.
+        // Cape silhouette: narrow at the collar, wider at the hem, with a V notch in the bottom
+        // third so the hem reads as cloth. Blocky on purpose, to sit alongside the game's icons.
         int top = 10;
         int bottom = ICON - 8;
         for (int y = top; y < bottom; y++) {
             float t = (float) (y - top) / (bottom - top);
             int halfWidth = (int) (10 + (14 * t));
             int x0 = (ICON / 2) - halfWidth;
-            int width = halfWidth * 2;
 
-            // The notch: a V cut into the bottom third so the hem reads as cloth, not a slab.
             int notch = 0;
             if (t > 0.72f) {
                 notch = (int) ((t - 0.72f) / 0.28f * halfWidth);
             }
-            g.setColor(mix(AMBER, AMBER_DEEP, t));
+            g.setColor(mix(d.light, d.deep, t));
             if (notch <= 0) {
-                g.fillRect(x0, y, width, 1);
+                g.fillRect(x0, y, halfWidth * 2, 1);
             } else {
                 g.fillRect(x0, y, halfWidth - notch, 1);
                 g.fillRect(ICON / 2 + notch, y, halfWidth - notch, 1);
             }
         }
 
-        // Collar.
-        g.setColor(TRIM);
+        g.setColor(trim);
         g.fillRect((ICON / 2) - 11, top - 2, 22, 3);
+
+        // The same crown, scale 1, on the upper half so each icon names its design at a glance.
+        drawCrown(g, (ICON - CROWN[0].length()) / 2, 22, 1, trim, highlight);
+
         g.dispose();
         return img;
+    }
+
+    /** Paints the crown: an outline pass one pixel out in all directions, then the fill. */
+    private static void drawCrown(Graphics2D g, int x, int y, int scale,
+                                  Color outline, Color fill) {
+        g.setColor(outline);
+        for (int r = 0; r < CROWN.length; r++) {
+            for (int c = 0; c < CROWN[r].length(); c++) {
+                if (CROWN[r].charAt(c) == 'X') {
+                    g.fillRect(x + c * scale - 1, y + r * scale - 1, scale + 2, scale + 2);
+                }
+            }
+        }
+        g.setColor(fill);
+        for (int r = 0; r < CROWN.length; r++) {
+            for (int c = 0; c < CROWN[r].length(); c++) {
+                if (CROWN[r].charAt(c) == 'X') {
+                    g.fillRect(x + c * scale, y + r * scale, scale, scale);
+                }
+            }
+        }
     }
 
     private static Color mix(Color a, Color b, float t) {
@@ -123,6 +184,10 @@ public final class CapeTextureGen {
                 Math.round(a.getRed() + ((b.getRed() - a.getRed()) * t)),
                 Math.round(a.getGreen() + ((b.getGreen() - a.getGreen()) * t)),
                 Math.round(a.getBlue() + ((b.getBlue() - a.getBlue()) * t)));
+    }
+
+    private static String cap(String s) {
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
     private static void write(BufferedImage img, File out) throws Exception {

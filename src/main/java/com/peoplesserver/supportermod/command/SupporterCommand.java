@@ -544,6 +544,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    /supporter title <text>, /supporter colour <hex>");
             info(ctx, "  Particle trails — " + config.trails().size() + " to choose from");
             info(ctx, "    /supporter trail <name>, /supporter shop");
+            info(ctx, "  A supporter cape — 6 designs");
+            info(ctx, "    /supporter cape");
             info(ctx, "  Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "  Tokens: " + config.tokensPerMonth() + " per month of support");
@@ -609,6 +611,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "  What you get:");
             info(ctx, "    A chat tag, your own title and chat colour");
             info(ctx, "    Particle trails — " + config.trails().size() + " to choose from");
+            info(ctx, "    A supporter cape — 6 designs, /supporter cape");
             info(ctx, "    Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "    " + config.tokensPerMonth()
@@ -652,28 +655,75 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     // --- /supporter cape ----------------------------------------------------------------------
 
     /**
-     * {@code /supporter cape} — hands the supporter cape to an active supporter.
+     * {@code /supporter cape} lists the designs; {@code /supporter cape <design>} hands one over.
      *
-     * <p><b>Re-issuable on purpose.</b> A cape is an item, so it can be dropped, lost on death or
-     * left in a chest, and the standing rule here is that nobody loses what they paid for. So the
-     * entitlement is the record of truth and this command mints a fresh one whenever it is asked.
-     * There is no counter and nothing to run out: losing it costs the player nothing but the walk
-     * back.
+     * <p><b>Six designs, one per allowed chat colour</b> — the same palette as
+     * {@code allowedChatColors}, so a supporter can match their cape to their chat identity.
+     * Amber keeps the original {@code Supporter_Cape} item id because capes already in players'
+     * inventories must keep resolving; the other five are suffixed ids.
+     *
+     * <p><b>Re-issuable on purpose, in any design, as often as asked.</b> A cape is an item, so
+     * it can be dropped, lost on death or left in a chest, and the standing rule here is that
+     * nobody loses what they paid for. The entitlement is the record of truth and the item is
+     * minted on demand. There is deliberately no one-cape limit — the designs are the perk.
      *
      * <p>It is a chest-slot armour piece with zero damage resistance — no combat advantage, and
      * wearing it means wearing no chest armour. That trade-off is the whole design: it is a
      * cosmetic to be seen in, not an edge in a fight.
+     *
+     * <p>The design argument lives on a nameless usage variant, dispatched on required-argument
+     * count — the standard workaround for {@code withOptionalArg} registering a named flag
+     * rather than an optional positional.
      */
     public static final class CapeSub extends PublicPlayerCommand {
-        /** Matches the id of Server/Item/Items/Armor/Cloak/Supporter_Cape.json in our asset pack. */
-        static final String CAPE_ITEM_ID = "Supporter_Cape";
 
-        private final SupporterPlugin plugin;
+        /**
+         * Design name → item id, matching Server/Item/Items/Armor/Cloak/ in our asset pack.
+         * Insertion order is display order.
+         */
+        static final java.util.Map<String, String> DESIGNS = new java.util.LinkedHashMap<>();
+
+        static {
+            DESIGNS.put("amber", "Supporter_Cape");
+            DESIGNS.put("frost", "Supporter_Cape_Frost");
+            DESIGNS.put("rose", "Supporter_Cape_Rose");
+            DESIGNS.put("jade", "Supporter_Cape_Jade");
+            DESIGNS.put("gold", "Supporter_Cape_Gold");
+            DESIGNS.put("ember", "Supporter_Cape_Ember");
+        }
 
         public CapeSub(SupporterPlugin plugin) {
-            super("cape", "Get your supporter cape (again, if you lost it).");
+            super("cape", "Your supporter cape: 6 designs to choose from.");
+            setPermissionGroup(GameMode.Adventure);
+            // "/supporter capes" reads more naturally for the list, so it is an alias — the
+            // bare form of either spelling lists, and "<design>" on either delivers.
+            addAliases(new String[] {"capes"});
+            addUsageVariant(new CapeDesignVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            // The bare command only informs, so it stays useful to non-supporters too — seeing
+            // the designs is part of the pitch.
+            ok(ctx, "Cape designs: " + String.join(", ", DESIGNS.keySet()));
+            info(ctx, "/supporter cape <design> to get one — matching your chat colour, "
+                    + "if you like.");
+        }
+    }
+
+    /** The {@code /supporter cape <design>} form. */
+    public static final class CapeDesignVariant extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument designArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public CapeDesignVariant(SupporterPlugin plugin) {
+            super("Get a supporter cape in one of 6 designs.");
             setPermissionGroup(GameMode.Adventure);
             this.plugin = plugin;
+            this.designArg = withRequiredArg("design", "cape design",
+                    (ArgumentType) ArgTypes.STRING);
         }
 
         @Override
@@ -687,26 +737,27 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 err(ctx, "The cape is a supporter perk. /supporter info to find out more.");
                 return;
             }
+            String design = String.valueOf(ctx.get(designArg)).trim().toLowerCase();
+            String itemId = CapeSub.DESIGNS.get(design);
+            if (itemId == null) {
+                err(ctx, "No such design. Choose from: "
+                        + String.join(", ", CapeSub.DESIGNS.keySet()));
+                return;
+            }
             try {
-                if (!give(ctx, ref, store, CAPE_ITEM_ID)) {
+                ItemStackTransaction tx = Player.giveItem(new ItemStack(itemId, 1), ref, store);
+                ItemStack remainder = tx == null ? null : tx.getRemainder();
+                if (remainder != null && !remainder.isEmpty()) {
                     err(ctx, "No room in your inventory — clear a slot and try again.");
                     return;
                 }
-                ok(ctx, "Supporter cape delivered. Wear it in your chest slot.");
+                ok(ctx, "Supporter cape (" + design + ") delivered. Wear it in your chest slot.");
                 info(ctx, "It gives no protection at all, so take it off before a fight. "
-                        + "Lost it? Run this again, as often as you like.");
+                        + "Lost it, or want another design? Run this again any time.");
             } catch (Throwable t) {
                 err(ctx, "Could not deliver the cape: " + t.getMessage());
                 plugin.log().error("Cape delivery failed for " + player.getUuid(), t);
             }
-        }
-
-        /** @return true if the whole stack was accepted */
-        private boolean give(CommandContext ctx, Ref<EntityStore> ref, Store<EntityStore> store,
-                             String itemId) {
-            ItemStackTransaction tx = Player.giveItem(new ItemStack(itemId, 1), ref, store);
-            ItemStack remainder = tx == null ? null : tx.getRemainder();
-            return remainder == null || remainder.isEmpty();
         }
     }
 
