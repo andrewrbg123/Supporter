@@ -10,10 +10,14 @@ import javax.imageio.ImageIO;
  *
  * <p>Run with: {@code java tools/CapeTextureGen.java src/main/resources}
  *
- * <p><b>128x96, because that is what the cape geometry expects.</b> The item points at the vanilla
- * {@code Cosmetics/Capes/Cape_Basic.blockymodel} — geometry that already ships with every client,
- * so nothing of anyone else's art is redistributed and no modelling is needed — and its UVs are
- * laid out for a 128x96 sheet. A different size would map somewhere unpredictable.
+ * <p><b>96x96, because that is what the cape geometry expects.</b> The item points at the vanilla
+ * {@code Items/Back/Cape_Long.blockymodel} — geometry that already ships with every client, so no
+ * modelling is needed and nothing of anyone else's art is redistributed. Its texture sheet is
+ * 96x96; a different size would map somewhere unpredictable.
+ *
+ * <p>It has to live under {@code Items/} specifically: the asset validator rejects an item whose
+ * model is outside [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/], and a rejected asset
+ * does not degrade — it aborts the entire server boot.
  *
  * <p><b>Deliberately near-uniform.</b> Without the UV map, any detail placed at a specific spot
  * lands somewhere unknown on the cape. A vertical gradient with an edge trim reads as intentional
@@ -26,7 +30,13 @@ import javax.imageio.ImageIO;
  */
 public final class CapeTextureGen {
 
-    private static final int TEX_W = 128;
+    /**
+     * 96x96, matching Items/Back/Cape_Long_Texture.png.
+     *
+     * <p>The size is dictated by the geometry we point at, not chosen. Get it wrong and the UVs
+     * map somewhere unintended.
+     */
+    private static final int TEX_W = 96;
     private static final int TEX_H = 96;
     private static final int ICON = 64;
 

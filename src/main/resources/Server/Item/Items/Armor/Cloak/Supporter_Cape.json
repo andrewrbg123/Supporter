@@ -11,7 +11,7 @@
     "Rotation": [22.5, 47.815, 22.5],
     "Translation": [4, -55]
   },
-  "Model": "Cosmetics/Capes/Cape_Basic.blockymodel",
+  "Model": "Items/Back/Cape_Long.blockymodel",
   "Texture": "Items/Armor/Supporter_Cape.png",
   "Armor": {
     "ArmorSlot": "Chest",
