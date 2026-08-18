@@ -887,7 +887,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                                PlayerRef player, World world) {
             ok(ctx, "Skins: " + String.join(", ",
-                    com.peoplesserver.supportermod.ui.SkinChanger.SKINS.keySet()) + " — or off");
+                    com.peoplesserver.supportermod.ui.SkinChanger.allNames()) + " — or off");
             info(ctx, "/supporter skin <name>. Yours stays on until you turn it off — "
                     + "even across relogs.");
         }
@@ -920,9 +920,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             }
             String name = String.valueOf(ctx.get(nameArg)).trim().toLowerCase();
             boolean off = name.equals("off");
-            if (!off && !com.peoplesserver.supportermod.ui.SkinChanger.SKINS.containsKey(name)) {
+            if (!off && !com.peoplesserver.supportermod.ui.SkinChanger.knows(name)) {
                 err(ctx, "No such skin. Choose from: " + String.join(", ",
-                        com.peoplesserver.supportermod.ui.SkinChanger.SKINS.keySet()) + ", off");
+                        com.peoplesserver.supportermod.ui.SkinChanger.allNames()) + ", off");
                 return;
             }
             java.util.UUID uuid = player.getUuid();

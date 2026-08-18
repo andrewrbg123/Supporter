@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.asset.type.model.config.Model;
 import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
+import com.hypixel.hytale.protocol.PlayerSkin;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
@@ -47,15 +48,130 @@ public final class SkinChanger {
         SKINS.put("shadow", new String[] {"Flashy_Synthetic", "Black"});
     }
 
-    /** Applies a catalogue skin by name; unknown names are refused, not errors. */
+    /** Registers a costume preset. Called by the plugin at startup, before any player joins. */
+    public static void registerCostume(String name, String rawJson) {
+        COSTUME_JSON.put(name.toLowerCase(), rawJson);
+        COSTUME_PARSED.remove(name.toLowerCase());
+    }
+
+    /** Every applyable name: tints first, then costumes, for listings and validation. */
+    public static java.util.List<String> allNames() {
+        java.util.List<String> out = new java.util.ArrayList<>(SKINS.keySet());
+        out.addAll(new java.util.TreeSet<>(COSTUME_JSON.keySet()));
+        return out;
+    }
+
+    public static boolean knows(String name) {
+        if (name == null) {
+            return false;
+        }
+        String key = name.toLowerCase();
+        return SKINS.containsKey(key) || COSTUME_JSON.containsKey(key);
+    }
+
+    /** Applies a catalogue skin — tint or costume — by name; unknown names are refused. */
     public static Result applyByName(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid,
                                      String name) {
-        String[] tint = name == null ? null : SKINS.get(name.toLowerCase());
-        if (tint == null) {
-            return new Result(false, "unknown skin: " + name);
+        String key = name == null ? "" : name.toLowerCase();
+        String[] tint = SKINS.get(key);
+        if (tint != null) {
+            return apply(store, ref, uuid, tint[0], tint[1]);
         }
-        return apply(store, ref, uuid, tint[0], tint[1]);
+        if (COSTUME_JSON.containsKey(key)) {
+            return applyCostume(store, ref, uuid, key);
+        }
+        return new Result(false, "unknown skin: " + name);
     }
+
+    /**
+     * Applies a costume: swaps the fields of the player's {@code PlayerSkin} to the preset's and
+     * marks the component outdated, so the client recomposes the FULL look — hair, clothing,
+     * accessories — exactly as it would from the character creator. World thread only.
+     *
+     * <p>This is the opposite lever from the tints: a tint pushes a model (statue mode, clothing
+     * packed away); a costume pushes a skin (full outfit). If a tint is active it is cleared
+     * first, or the pushed model would sit over the composition and hide the costume entirely.
+     */
+    private static Result applyCostume(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid,
+                                       String key) {
+        PlayerSkin preset = COSTUME_PARSED.get(key);
+        if (preset == null) {
+            try {
+                com.hypixel.hytale.server.core.cosmetics.CosmeticsModule cosmetics =
+                        com.hypixel.hytale.server.core.cosmetics.CosmeticsModule.get();
+                if (cosmetics == null) {
+                    return new Result(false, "cosmetics module unavailable");
+                }
+                PlayerSkin parsed = cosmetics.parseSkinFromJson(COSTUME_JSON.get(key));
+                cosmetics.validateSkin(parsed);
+                COSTUME_PARSED.put(key, parsed);
+                preset = parsed;
+            } catch (Throwable t) {
+                return new Result(false, "costume '" + key + "' failed to parse or validate: "
+                        + t.getMessage());
+            }
+        }
+
+        PlayerSkinComponent component =
+                store.getComponent(ref, PlayerSkinComponent.getComponentType());
+        if (component == null || component.getPlayerSkin() == null) {
+            return new Result(false, "no player skin to change");
+        }
+
+        // A pushed tint model would render over the composition; take it off first.
+        Model tinted = ORIGINALS.remove(uuid);
+        if (tinted != null) {
+            store.putComponent(ref, ModelComponent.getComponentType(), new ModelComponent(tinted));
+        }
+
+        PlayerSkin live = component.getPlayerSkin();
+        ORIGINAL_SKINS.putIfAbsent(uuid, new PlayerSkin(live));
+        copyInto(preset, live);
+        component.setNetworkOutdated();
+        return new Result(true, "costume " + key);
+    }
+
+    /** All twenty cosmetic part fields — {@code PlayerSkin}'s fields are public and mutable. */
+    private static void copyInto(PlayerSkin from, PlayerSkin to) {
+        to.bodyCharacteristic = from.bodyCharacteristic;
+        to.underwear = from.underwear;
+        to.face = from.face;
+        to.eyes = from.eyes;
+        to.ears = from.ears;
+        to.mouth = from.mouth;
+        to.facialHair = from.facialHair;
+        to.haircut = from.haircut;
+        to.eyebrows = from.eyebrows;
+        to.pants = from.pants;
+        to.overpants = from.overpants;
+        to.undertop = from.undertop;
+        to.overtop = from.overtop;
+        to.shoes = from.shoes;
+        to.headAccessory = from.headAccessory;
+        to.faceAccessory = from.faceAccessory;
+        to.earAccessory = from.earAccessory;
+        to.skinFeature = from.skinFeature;
+        to.gloves = from.gloves;
+        to.cape = from.cape;
+    }
+
+    /**
+     * Costume name → raw preset JSON, registered by the plugin from
+     * {@code plugins/SupporterMod/costumes/*.json} at startup and parsed lazily.
+     *
+     * <p>The JSON is the game's own {@code PlayerSkin} format — the same shape
+     * hytalecharacter.com exports — so an admin composes a costume there, drops the file in the
+     * folder, and it is a supporter skin after a restart with no rebuild. Parsing is lazy
+     * because {@code CosmeticsModule}'s registry is not loaded during plugin setup; first use is
+     * long after assets are up. Parts must be vetted for entitlements BY THE ADMIN before
+     * adding: the server cannot check them (there is no entitlement data server-side), and
+     * edition-locked parts must not be handed out.
+     */
+    private static final Map<String, String> COSTUME_JSON = new ConcurrentHashMap<>();
+    private static final Map<String, PlayerSkin> COSTUME_PARSED = new ConcurrentHashMap<>();
+
+    /** The account skin each player had before their first costume, for restore. */
+    private static final Map<UUID, PlayerSkin> ORIGINAL_SKINS = new ConcurrentHashMap<>();
 
     /** The live model each player had before their first tint, for restore. */
     private static final Map<UUID, Model> ORIGINALS = new ConcurrentHashMap<>();
@@ -93,16 +209,29 @@ public final class SkinChanger {
      * says so either way.
      */
     public static Result restore(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid) {
+        boolean restoredAnything = false;
+
         Model original = ORIGINALS.remove(uuid);
-        if (original == null) {
-            return new Result(false,
-                    "nothing to restore in this session — relogging restores your look");
+        if (original != null) {
+            store.putComponent(ref, ModelComponent.getComponentType(),
+                    new ModelComponent(original));
+            restoredAnything = true;
         }
-        store.putComponent(ref, ModelComponent.getComponentType(), new ModelComponent(original));
+
         PlayerSkinComponent skin =
                 store.getComponent(ref, PlayerSkinComponent.getComponentType());
-        if (skin != null) {
+        PlayerSkin originalSkin = ORIGINAL_SKINS.remove(uuid);
+        if (skin != null && skin.getPlayerSkin() != null && originalSkin != null) {
+            copyInto(originalSkin, skin.getPlayerSkin());
+            restoredAnything = true;
+        }
+        if (skin != null && (restoredAnything || originalSkin != null)) {
             skin.setNetworkOutdated();
+        }
+
+        if (!restoredAnything) {
+            return new Result(false,
+                    "nothing to restore in this session — relogging restores your look");
         }
         return new Result(true, "restored");
     }

@@ -87,6 +87,63 @@ public final class SupporterPlugin extends JavaPlugin {
             this.config = SupporterConfig.load(dataDir.resolve("supporter.json"), log::info);
             this.storage = SupporterStorage.open(dataDir.resolve(config.databaseFile()));
 
+            // v0.18.0: costume presets. Each *.json in costumes/ is a PlayerSkin in the game's
+            // own format — the shape hytalecharacter.com exports — so an admin composes an
+            // outfit there, drops the file here, restarts, and it is a supporter skin. Loaded
+            // as raw text now and parsed lazily on first use, because the cosmetics registry
+            // does not exist yet during setup. VET PARTS BEFORE ADDING: the server has no
+            // entitlement data, so nothing here can stop an edition-locked part being handed
+            // out except the admin checking first.
+            java.nio.file.Path costumes = dataDir.resolve("costumes");
+            Files.createDirectories(costumes);
+            try (var listing = Files.list(costumes)) {
+                if (listing.findAny().isEmpty()) {
+                    Files.writeString(costumes.resolve("jack-sparrow.json"), """
+                            {
+                              "bodyCharacteristic": "Default.04",
+                              "underwear": "Boxer.Blue",
+                              "face": "Face_Sunken",
+                              "ears": "Default",
+                              "mouth": "Mouth_Makeup",
+                              "haircut": "FeatheredHair.BrownDark",
+                              "facialHair": "PirateGoatee.BrownDark",
+                              "eyebrows": "Plucked.BrownDark",
+                              "eyes": "Medium_Eyes.BrownDark",
+                              "pants": "PinstripeTrousers.Brown",
+                              "overpants": null,
+                              "undertop": "LongSleeveShirt.Grey",
+                              "overtop": "TrenchCoat.Black",
+                              "shoes": "Wellies.Black",
+                              "headAccessory": "PirateBandana.Red",
+                              "faceAccessory": null,
+                              "earAccessory": "EarHoops.Brass_Purple.Both",
+                              "skinFeature": null,
+                              "gloves": "GoldenBracelets.Gold_Red",
+                              "cape": null
+                            }
+                            """, java.nio.charset.StandardCharsets.UTF_8);
+                }
+            }
+            int costumeCount = 0;
+            try (var listing = Files.list(costumes)) {
+                for (java.nio.file.Path file : listing.filter(
+                        p -> p.getFileName().toString().endsWith(".json")).toList()) {
+                    String name = file.getFileName().toString()
+                            .replaceFirst("\\.json$", "").toLowerCase();
+                    try {
+                        com.peoplesserver.supportermod.ui.SkinChanger.registerCostume(
+                                name, Files.readString(file, java.nio.charset.StandardCharsets.UTF_8));
+                        costumeCount++;
+                    } catch (Exception e) {
+                        // One unreadable costume must not cost the others, or the boot.
+                        log.warn("Costume " + file.getFileName() + " not loaded: " + e);
+                    }
+                }
+            }
+            if (costumeCount > 0) {
+                log.info(costumeCount + " costume(s) loaded from " + costumes);
+            }
+
             Color tagColor = tagColor(config);
             this.messenger = new HytaleMessenger(tagColor);
             this.directory = new HytalePlayerDirectory();

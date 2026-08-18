@@ -913,20 +913,20 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("WdSkins",
                 "Body skins — statue mode; stays on across relogs", theme.heading(), row++));
         index = 0;
-        for (String skinName : SkinChanger.SKINS.keySet()) {
+        for (String skinName : SkinChanger.allNames()) {
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdSkin_" + skinName, skinName, theme.buttonLabel(),
-                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
                             service, uuid, playerRef, skinName, world, ctx)));
             index++;
         }
         tab = (TabContentBuilder) tab.addChild(wearButton(
                 "WdSkin_off", "off", theme.buttonLabel(),
-                index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                 (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
                         service, uuid, playerRef, null, world, ctx)));
-        row += 2;
+        row += 2 + (index / 6);
 
         tab = (TabContentBuilder) tab.addChild(line("WdNote",
                 "Everything here is cosmetic — zero protection, and each shares a slot with "
