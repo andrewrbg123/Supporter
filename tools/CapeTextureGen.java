@@ -128,8 +128,13 @@ public final class CapeTextureGen {
         // The crown goes on the OUTER face region — see OUTER_X. Drawing it at the declared
         // offset paints the lining instead, which is how the first build put the crown on the
         // inside of the cape.
+        //
+        // And it starts BELOW row 13 of the panel: Cape1 has a child node — a 30x11 shoulder
+        // mantle that physically hangs over the top of the back panel — and a crown centred in
+        // the panel sat with its spikes tucked behind that flap. 11 rows of mantle plus two of
+        // clearance.
         drawCrown(g, OUTER_X + (PANEL_W - CROWN[0].length() * 2) / 2,
-                PANEL_Y + (PANEL_H - CROWN.length * 2) / 2 + 1, 2, trim, highlight);
+                PANEL_Y + 13, 2, trim, highlight);
 
         g.dispose();
         return img;
