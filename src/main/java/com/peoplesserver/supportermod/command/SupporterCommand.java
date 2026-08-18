@@ -72,6 +72,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new TrailsVisibilitySub(plugin));
         addSubCommand(new PerksSub(plugin));
         addSubCommand(new CapeSub(plugin));
+        addSubCommand(new HatSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
@@ -757,6 +758,62 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (Throwable t) {
                 err(ctx, "Could not deliver the cape: " + t.getMessage());
                 plugin.log().error("Cape delivery failed for " + player.getUuid(), t);
+            }
+        }
+    }
+
+    // --- /supporter hat -----------------------------------------------------------------------
+
+    /**
+     * {@code /supporter hat} — the Supporter Crown, head-slot counterpart of the cape.
+     *
+     * <p>Same shape as the cape in every way that matters: an armour item with zero damage
+     * resistance, so no combat advantage and wearing it means wearing no helmet; re-issuable on
+     * demand because nobody loses what they paid for; and the geometry ships in our asset pack —
+     * the plugin's first self-authored model, built against the box schema read out of Violet's
+     * Wardrobe's beanie (root node named "Head" is the bone anchor).
+     *
+     * <p>One design for now, deliberately — the cape went one design first too, and colour
+     * variants are trivial once the bone attachment and scale are proven in game.
+     */
+    public static final class HatSub extends PublicPlayerCommand {
+        /** Matches Server/Item/Items/Armor/Supporter_Crown.json in our asset pack. */
+        static final String CROWN_ITEM_ID = "Supporter_Crown";
+
+        private final SupporterPlugin plugin;
+
+        public HatSub(SupporterPlugin plugin) {
+            super("hat", "Get your Supporter Crown (again, if you lost it).");
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"crown"});
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(player.getUuid())) {
+                err(ctx, "The crown is a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            try {
+                ItemStackTransaction tx =
+                        Player.giveItem(new ItemStack(CROWN_ITEM_ID, 1), ref, store);
+                ItemStack remainder = tx == null ? null : tx.getRemainder();
+                if (remainder != null && !remainder.isEmpty()) {
+                    err(ctx, "No room in your inventory — clear a slot and try again.");
+                    return;
+                }
+                ok(ctx, "Supporter Crown delivered. Wear it in your head slot.");
+                info(ctx, "It gives no protection at all, so take it off before a fight. "
+                        + "Lost it? Run this again, as often as you like.");
+            } catch (Throwable t) {
+                err(ctx, "Could not deliver the crown: " + t.getMessage());
+                plugin.log().error("Crown delivery failed for " + player.getUuid(), t);
             }
         }
     }

@@ -1,0 +1,199 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Head",
+      "position": {"x": 0, "y": 0, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {
+        "type": "none",
+        "offset": {"x": 0, "y": 0, "z": 0},
+        "stretch": {"x": 0, "y": 0, "z": 0},
+        "settings": {
+          "isPiece": true
+        },
+        "textureLayout": {},
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "flat"
+      },
+      "children": [
+        {
+          "id": "2",
+          "name": "Band",
+          "position": {"x": 0, "y": 3, "z": 0.55},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 34, "y": 6, "z": 33}
+            },
+            "textureLayout": {
+              "front":  {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "back":   {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "left":   {"offset": {"x": 1, "y": 9},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "right":  {"offset": {"x": 1, "y": 9},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "top":    {"offset": {"x": 1, "y": 17}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "bottom": {"offset": {"x": 1, "y": 17}, "mirror": {"x": false, "y": false}, "angle": 0}
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "flat"
+          },
+          "children": [
+            {
+              "id": "3",
+              "name": "Spike--FL",
+              "position": {"x": -14, "y": 6, "z": 13.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 4, "y": 6, "z": 4},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "4",
+              "name": "Spike--FR",
+              "position": {"x": 14, "y": 6, "z": 13.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 4, "y": 6, "z": 4},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "5",
+              "name": "Spike--BL",
+              "position": {"x": -14, "y": 6, "z": -12.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 4, "y": 6, "z": 4},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "6",
+              "name": "Spike--BR",
+              "position": {"x": 14, "y": 6, "z": -12.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 4, "y": 6, "z": 4},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 40, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 40, "y": 9}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            },
+            {
+              "id": "7",
+              "name": "Jewel",
+              "position": {"x": 0, "y": 1, "z": 16.5},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 6, "y": 4, "z": 2},
+                  "isStaticBox": true
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 48, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 48, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 56, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 56, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 48, "y": 7}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 48, "y": 7}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
