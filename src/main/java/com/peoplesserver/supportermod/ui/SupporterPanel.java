@@ -60,7 +60,11 @@ public final class SupporterPanel {
     private static final int WIDTH = 720;
     private static final int HEIGHT = 520;
     private static final int PAD = 24;
-    private static final int ROW_HEIGHT = 24;
+    /**
+     * Row pitch. Must exceed BUY_HEIGHT, or the Buy buttons on consecutive rows overlap - the
+     * first build had 24 against a 26-tall button and they visibly touched.
+     */
+    private static final int ROW_HEIGHT = 30;
 
     /** Tab hit area. Text-only tabs were too small a target on the first live build. */
     private static final int TAB_WIDTH = 150;
@@ -309,8 +313,23 @@ public final class SupporterPanel {
         return tab;
     }
 
+    /**
+     * Whether a row gets a Buy button element at all.
+     *
+     * <p>Free and already-owned trails never get one, and nothing can change that while the panel
+     * is open, so the element is simply never built. Everything else gets a button whose
+     * <em>visibility</em> is then driven by {@link #canAfford} — the element has to exist up front
+     * because {@code editById} can only edit something that was built, so a button that might
+     * become affordable later must be present and hidden rather than absent.
+     */
     private boolean buyable(SupporterService service, UUID uuid, String id) {
         return plugin.config().trailCost(id) > 0 && !service.unlocks(uuid).contains(id);
+    }
+
+    /** Whether that button is shown. A button you cannot use is noise — the row states why. */
+    private boolean canAfford(SupporterService service, UUID uuid, String id) {
+        return buyable(service, uuid, id)
+                && service.tokenBalance(uuid) >= plugin.config().trailCost(id);
     }
 
     private CustomButtonBuilder buyButton(SupporterService service, UUID uuid, String trailId,
@@ -322,11 +341,16 @@ public final class SupporterPanel {
                         .setLeft(WIDTH - (PAD * 2) - BUY_WIDTH)
                         .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
         button = button.withText("Buy")
+                .withVisible(canAfford(service, uuid, trailId))
                 .withDefaultBackground(theme.tabBackground())
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
         return button.addEventListener(CustomUIEventBindingType.Activating,
                 (Void v, au.ellie.hyui.events.UIContext ctx) -> buy(service, uuid, trailId, world, ctx));
+    }
+
+    private static String buyId(String trailId) {
+        return "SupBuy_" + trailId;
     }
 
     private void buy(SupporterService service, UUID uuid, String trailId, World world,
@@ -351,16 +375,35 @@ public final class SupporterPanel {
         String note = message;
         world.execute(() -> {
             try {
-                ctx.editById(BALANCE_ID, LabelBuilder.class,
-                        label -> label.withText(balanceText(service, uuid)));
-                ctx.editById(rowId(trailId), LabelBuilder.class,
-                        label -> label.withText(rowText(service, uuid, trailId)));
-                ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(note));
-                ctx.updatePage(false);
+                refreshShop(service, uuid, ctx, note);
             } catch (Throwable t) {
                 plugin.log().warn("Shop panel refresh failed: " + t);
             }
         });
+    }
+
+    /**
+     * Rewrites every part of the shop that a purchase can change.
+     *
+     * <p><b>Every row, not just the one that was bought.</b> Spending tokens changes the shortfall
+     * on all the others — buying snow at 150 took gold from "need 50 more" to "need 200 more" —
+     * and it can take a button from affordable to not. The first build only refreshed the row that
+     * was clicked, so the purchased item kept its Buy button and the other rows quietly lied until
+     * the panel was closed and reopened.
+     */
+    private void refreshShop(SupporterService service, UUID uuid,
+                             au.ellie.hyui.events.UIContext ctx, String note) {
+        ctx.editById(BALANCE_ID, LabelBuilder.class,
+                label -> label.withText(balanceText(service, uuid)));
+        for (String id : plugin.config().trails().keySet()) {
+            ctx.editById(rowId(id), LabelBuilder.class,
+                    label -> label.withText(rowText(service, uuid, id))
+                            .withStyle(rowStyle(service, uuid, id)));
+            ctx.editById(buyId(id), CustomButtonBuilder.class,
+                    button -> button.withVisible(canAfford(service, uuid, id)));
+        }
+        ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(note));
+        ctx.updatePage(false);
     }
 
     private static String rowId(String trailId) {
