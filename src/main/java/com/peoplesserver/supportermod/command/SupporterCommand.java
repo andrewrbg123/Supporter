@@ -610,6 +610,11 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 }
                 if (!config.storeUrl().isEmpty()) {
                     info(ctx, "  Where: " + config.storeUrl());
+                } else {
+                    // A price with no way to pay it is a dead end. This is a real state — the
+                    // price gets decided before the store is built — so it needs an answer
+                    // rather than silence.
+                    info(ctx, "  Where: ask an admin — the store is not open yet.");
                 }
             } else {
                 info(ctx, "  Pricing is not set up yet — ask an admin how to support the server.");
