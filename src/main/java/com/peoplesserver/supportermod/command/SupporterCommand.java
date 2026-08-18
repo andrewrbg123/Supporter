@@ -74,6 +74,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new CapeSub(plugin));
         addSubCommand(new HatSub(plugin));
         addSubCommand(new ShoesSub(plugin));
+        addSubCommand(new SkinSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
@@ -853,6 +854,109 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 err(ctx, "Could not deliver the hat: " + t.getMessage());
                 plugin.log().error("Hat delivery failed for " + player.getUuid(), t);
             }
+        }
+    }
+
+    // --- /supporter skin ----------------------------------------------------------------------
+
+    /**
+     * {@code /supporter skin} — body tints: the player's own model with its gradient swapped.
+     *
+     * <p><b>Session-only, stated up front.</b> The tint rides the live {@code ModelComponent},
+     * which the server rebuilds from the account skin on relogin, so it resets when you relog —
+     * and that reset is load-bearing, because it is also the always-correct restore. If the live
+     * test proves the render, persistence (re-apply on login from the identity table) is the
+     * follow-up.
+     *
+     * <p>{@code off} pushes back the model cached at first apply. It cannot rebuild from the
+     * account skin instead — that is the exact call that stripped the character to underwear in
+     * the cape spike.
+     */
+    public static final class SkinSub extends PublicPlayerCommand {
+
+        /** Skin name → gradientSet/gradientId, all from the client's own GradientSets.json. */
+        static final java.util.Map<String, String[]> SKINS = new java.util.LinkedHashMap<>();
+
+        static {
+            SKINS.put("gold", new String[] {"Ornamented_Metal", "Gold_Red"});
+            SKINS.put("silver", new String[] {"Ornamented_Metal", "Silver_Blue"});
+            SKINS.put("iron", new String[] {"Ornamented_Metal", "Iron_Black"});
+            SKINS.put("shadow", new String[] {"Flashy_Synthetic", "Black"});
+        }
+
+        public SkinSub(SupporterPlugin plugin) {
+            super("skin", "Body tints: " + String.join(", ", SKINS.keySet()) + ", off");
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"skins"});
+            addUsageVariant(new SkinVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            ok(ctx, "Skins: " + String.join(", ", SKINS.keySet()) + " — or off");
+            info(ctx, "/supporter skin <name>. Experimental: resets when you relog.");
+        }
+    }
+
+    /** The {@code /supporter skin <name|off>} form. */
+    public static final class SkinVariant extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument nameArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public SkinVariant(SupporterPlugin plugin) {
+            super("Apply a body tint, or off.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.nameArg = withRequiredArg("skin", "skin name or off",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(player.getUuid())) {
+                err(ctx, "Skins are a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            String name = String.valueOf(ctx.get(nameArg)).trim().toLowerCase();
+            boolean off = name.equals("off");
+            String[] tint = SkinSub.SKINS.get(name);
+            if (!off && tint == null) {
+                err(ctx, "No such skin. Choose from: "
+                        + String.join(", ", SkinSub.SKINS.keySet()) + ", off");
+                return;
+            }
+            java.util.UUID uuid = player.getUuid();
+            // Explicit hand-off: every SkinChanger entry point touches components, and being
+            // explicit about the world thread costs nothing.
+            world.execute(() -> {
+                try {
+                    com.peoplesserver.supportermod.ui.SkinChanger.Result result = off
+                            ? com.peoplesserver.supportermod.ui.SkinChanger.restore(
+                                    store, ref, uuid)
+                            : com.peoplesserver.supportermod.ui.SkinChanger.apply(
+                                    store, ref, uuid, tint[0], tint[1]);
+                    if (result.applied()) {
+                        ok(ctx, off ? "Skin off — back to your own look."
+                                : "Skin on: " + name + ". Third person to see it.");
+                        if (!off) {
+                            info(ctx, "Experimental: it resets when you relog, and "
+                                    + "/supporter skin off restores you any time.");
+                        }
+                    } else {
+                        err(ctx, "Skin change failed: " + result.detail());
+                    }
+                } catch (Throwable t) {
+                    err(ctx, "Skin change threw: " + t);
+                    plugin.log().error("Skin change failed for " + uuid, t);
+                }
+            });
         }
     }
 
