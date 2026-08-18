@@ -9,6 +9,7 @@ import au.ellie.hyui.builders.PageBuilder;
 import au.ellie.hyui.builders.SceneBlurBuilder;
 import au.ellie.hyui.builders.TabContentBuilder;
 import au.ellie.hyui.builders.TabNavigationBuilder;
+import au.ellie.hyui.builders.TextFieldBuilder;
 import au.ellie.hyui.builders.UIElementBuilder;
 
 import com.hypixel.hytale.component.Store;
@@ -19,6 +20,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import com.peoplesserver.supportermod.SupporterPlugin;
 import com.peoplesserver.supportermod.config.SupporterConfig;
+import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.SupporterRecord;
 import com.peoplesserver.supportermod.core.SupporterService;
 
@@ -67,9 +69,9 @@ public final class SupporterPanel {
     private static final int ROW_HEIGHT = 30;
 
     /** Tab hit area. Text-only tabs were too small a target on the first live build. */
-    private static final int TAB_WIDTH = 150;
+    private static final int TAB_WIDTH = 102; // narrowed from 150 when the bar grew to six tabs
     private static final int TAB_HEIGHT = 36;
-    private static final int TAB_SPACING = 12;
+    private static final int TAB_SPACING = 10;
 
     /** Buy button, sized to sit on the right of a shop row. */
     private static final int BUY_WIDTH = 96;
@@ -79,6 +81,11 @@ public final class SupporterPanel {
     private static final String NOTICE_ID = "SupNotice";
     private static final String STATUS_TOKENS_ID = "StTokens";
     private static final String STATUS_UNLOCKS_ID = "StUnlocks";
+    private static final String TRAIL_CURRENT_ID = "TrCurrent";
+    private static final String TRAIL_TOGGLE_ID = "TrToggle";
+    private static final String CHAT_TITLE_ID = "ChTitle";
+    private static final String CHAT_FIELD_ID = "ChTitleField";
+    private static final String CHAT_COLOR_ID = "ChColor";
 
     private final SupporterPlugin plugin;
     private final SupporterTheme theme;
@@ -112,6 +119,8 @@ public final class SupporterPanel {
             root = (GroupBuilder) root.addChild(statusTab(service, uuid));
             root = (GroupBuilder) root.addChild(perksTab(service, uuid));
             root = (GroupBuilder) root.addChild(shopTab(service, uuid, world));
+            root = (GroupBuilder) root.addChild(trailsTab(service, uuid, world));
+            root = (GroupBuilder) root.addChild(chatTab(service, uuid, world));
             root = (GroupBuilder) root.addChild(notice());
             root = (GroupBuilder) root.addChild(aboutTab());
 
@@ -167,6 +176,8 @@ public final class SupporterPanel {
                 .addTab("status", "Status", tabButton("status"))
                 .addTab("perks", "Perks", tabButton("perks"))
                 .addTab("shop", "Shop", tabButton("shop"))
+                .addTab("trails", "Trails", tabButton("trails"))
+                .addTab("chat", "Chat", tabButton("chat"))
                 .addTab("about", "About", tabButton("about"))
                 .withId(TABS_ID)
                 .withAnchor(new HyUIAnchor().setTop(62).setLeft(PAD)
@@ -421,6 +432,9 @@ public final class SupporterPanel {
             ctx.editById(buyId(id), CustomButtonBuilder.class,
                     button -> button.withVisible(canAfford(service, uuid, id)));
         }
+        // A purchase changes trail wearability too — the Trails tab must reveal the new Wear
+        // button without the panel being reopened. Same lesson as the Status tab, one tab over.
+        refreshTrails(service, uuid, ctx);
         ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(note));
         ctx.updatePage(false);
     }
@@ -455,6 +469,338 @@ public final class SupporterPanel {
         return service.tokenBalance(uuid) >= cost
                 ? theme.body()
                 : theme.coloured(SupporterTheme.INK_LOCKED, false);
+    }
+
+    // --- trails tab -----------------------------------------------------------------------
+
+    /**
+     * Pick a trail by clicking instead of typing {@code /supporter trail <name>}.
+     *
+     * <p>Wear buttons go through {@link SupporterService#selectTrail}, the ownership-aware call —
+     * the same one the chat command uses — so the panel cannot hand out a trail the shop would
+     * have charged for. Buttons exist for every trail and are merely hidden while not wearable,
+     * because {@code editById} can only edit an element that was built, and buying a trail in the
+     * Shop tab must be able to reveal its Wear button without reopening the panel.
+     *
+     * <p>The hide-others toggle is deliberately available to everyone, supporter or not — same
+     * rule as the chat command: a cosmetic the people looking at it cannot switch off is a
+     * nuisance, not a perk.
+     */
+    private UIElementBuilder<?> trailsTab(SupporterService service, UUID uuid, World world) {
+        TabContentBuilder tab = content("trails");
+        int row = 0;
+
+        tab = (TabContentBuilder) tab.addChild(line(TRAIL_CURRENT_ID,
+                trailCurrentText(service, uuid), theme.heading(), row));
+        boolean supporter = service.isSupporter(uuid);
+        if (supporter) {
+            tab = (TabContentBuilder) tab.addChild(
+                    smallButton("SupTrailOff", "Off", WIDTH - (PAD * 2) - BUY_WIDTH,
+                            row * ROW_HEIGHT - 4,
+                            (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                    wearTrail(service, uuid, null, world, ctx)));
+        }
+        row++;
+
+        tab = (TabContentBuilder) tab.addChild(
+                toggleButton(service, uuid, world, row * ROW_HEIGHT - 4));
+        row += 2;
+
+        if (!supporter) {
+            tab = (TabContentBuilder) tab.addChild(line("TrLocked",
+                    "Trails are a supporter perk. The About tab explains how to get them.",
+                    theme.dim(), row));
+            return tab;
+        }
+
+        List<String> ids = new ArrayList<>(plugin.config().trails().keySet());
+        ids.sort(Comparator.comparingInt(plugin.config()::trailCost).thenComparing(id -> id));
+        for (String id : ids) {
+            tab = (TabContentBuilder) tab.addChild(
+                    line(trailRowId(id), trailRowText(service, uuid, id),
+                            trailRowStyle(service, uuid, id), row));
+            tab = (TabContentBuilder) tab.addChild(
+                    smallButton(trailWearId(id), "Wear",
+                            WIDTH - (PAD * 2) - BUY_WIDTH, row * ROW_HEIGHT - 4,
+                            (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                    wearTrail(service, uuid, id, world, ctx))
+                            .withVisible(wearable(service, uuid, id)));
+            row++;
+        }
+        return tab;
+    }
+
+    private CustomButtonBuilder toggleButton(SupporterService service, UUID uuid, World world,
+                                             int top) {
+        CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
+                .withId(TRAIL_TOGGLE_ID)
+                .withAnchor(new HyUIAnchor().setTop(top).setLeft(0).setWidth(230).setHeight(BUY_HEIGHT));
+        button = button.withText(toggleText(service, uuid))
+                .withDefaultBackground(theme.tabBackground())
+                .withHoveredBackground(theme.tabHovered())
+                .withPressedBackground(theme.tabPressed());
+        return button.addEventListener(CustomUIEventBindingType.Activating,
+                (Void v, au.ellie.hyui.events.UIContext ctx) -> {
+                    String note;
+                    try {
+                        boolean nowHidden = !service.identity(uuid).hideTrails();
+                        service.setHideTrails(uuid, nowHidden);
+                        note = nowHidden ? "Other players' trails are now hidden for you."
+                                : "Other players' trails are now shown.";
+                    } catch (RuntimeException e) {
+                        note = "Could not save: " + e.getMessage();
+                    }
+                    String message = note;
+                    world.execute(() -> {
+                        try {
+                            ctx.editById(TRAIL_TOGGLE_ID, CustomButtonBuilder.class,
+                                    b -> b.withText(toggleText(service, uuid)));
+                            ctx.editById(NOTICE_ID, LabelBuilder.class,
+                                    label -> label.withText(message));
+                            ctx.updatePage(false);
+                        } catch (Throwable t) {
+                            plugin.log().warn("Trails toggle refresh failed: " + t);
+                        }
+                    });
+                });
+    }
+
+    private void wearTrail(SupporterService service, UUID uuid, String trailId, World world,
+                           au.ellie.hyui.events.UIContext ctx) {
+        String note;
+        try {
+            service.selectTrail(uuid, trailId);
+            note = trailId == null ? "Trail off." : "Now wearing " + trailId + ".";
+        } catch (IllegalArgumentException e) {
+            note = e.getMessage();
+        } catch (RuntimeException e) {
+            plugin.log().error("selectTrail failed for " + uuid + " (" + trailId + ")", e);
+            note = "Could not save your trail - try /supporter trail " + trailId;
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                refreshTrails(service, uuid, ctx);
+                ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(message));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Trails refresh failed: " + t);
+            }
+        });
+    }
+
+    /** Rewrites the trails tab: the wearing header and every row's marker and button. */
+    private void refreshTrails(SupporterService service, UUID uuid,
+                               au.ellie.hyui.events.UIContext ctx) {
+        ctx.editById(TRAIL_CURRENT_ID, LabelBuilder.class,
+                label -> label.withText(trailCurrentText(service, uuid)));
+        for (String id : plugin.config().trails().keySet()) {
+            ctx.editById(trailRowId(id), LabelBuilder.class,
+                    label -> label.withText(trailRowText(service, uuid, id))
+                            .withStyle(trailRowStyle(service, uuid, id)));
+            ctx.editById(trailWearId(id), CustomButtonBuilder.class,
+                    button -> button.withVisible(wearable(service, uuid, id)));
+        }
+    }
+
+    private boolean wearable(SupporterService service, UUID uuid, String id) {
+        return plugin.config().trailCost(id) <= 0 || service.unlocks(uuid).contains(id);
+    }
+
+    private String trailCurrentText(SupporterService service, UUID uuid) {
+        String worn = service.identity(uuid).trail();
+        return worn == null ? "No trail on" : "Wearing: " + worn;
+    }
+
+    private String trailRowText(SupporterService service, UUID uuid, String id) {
+        int cost = plugin.config().trailCost(id);
+        String state = cost <= 0 ? "free"
+                : service.unlocks(uuid).contains(id) ? "owned"
+                : "locked - " + cost + " tokens in the Shop tab";
+        String wearing = id.equals(service.identity(uuid).trail()) ? "  (wearing)" : "";
+        return id + " - " + state + wearing;
+    }
+
+    private HyUIStyle trailRowStyle(SupporterService service, UUID uuid, String id) {
+        if (id.equals(service.identity(uuid).trail())) {
+            return theme.coloured(SupporterTheme.INK_GOOD, true);
+        }
+        return wearable(service, uuid, id) ? theme.body()
+                : theme.coloured(SupporterTheme.INK_LOCKED, false);
+    }
+
+    private static String trailRowId(String id) {
+        return "TrRow_" + id;
+    }
+
+    private static String trailWearId(String id) {
+        return "TrWear_" + id;
+    }
+
+    // --- chat tab -------------------------------------------------------------------------
+
+    /**
+     * Title and chat colour by clicking instead of typing.
+     *
+     * <p><b>The title field carries a no-op {@code ValueChanged} listener, and it is
+     * load-bearing.</b> HyUI only stores an element's value into {@code elementValues} while
+     * dispatching a listener for that event — the store happens inside the listener loop in
+     * {@code HyUInterface.handleElementEvents} — so without a listener the Set button would read
+     * back whatever the field was built with, forever, no matter what the player typed.
+     *
+     * <p>Colour swatches are built from {@code allowedChatColors}, each labelled in its own
+     * colour, so the panel stays correct when an admin edits the list — the same reason the
+     * validation lives in the service and not here.
+     */
+    private UIElementBuilder<?> chatTab(SupporterService service, UUID uuid, World world) {
+        TabContentBuilder tab = content("chat");
+        int row = 0;
+
+        if (!service.isSupporter(uuid)) {
+            tab = (TabContentBuilder) tab.addChild(line("ChLocked",
+                    "Chat titles and colours are a supporter perk. The About tab explains how "
+                            + "to get them.", theme.dim(), row));
+            return tab;
+        }
+
+        tab = (TabContentBuilder) tab.addChild(line(CHAT_TITLE_ID,
+                titleText(service, uuid), theme.heading(), row++));
+
+        TextFieldBuilder field = (TextFieldBuilder) TextFieldBuilder.textInput()
+                .withId(CHAT_FIELD_ID)
+                .withAnchor(new HyUIAnchor().setTop(row * ROW_HEIGHT - 4).setLeft(0)
+                        .setWidth(300).setHeight(28));
+        field = field.withPlaceholderText("Your title...")
+                .withValue(service.identity(uuid).title() == null
+                        ? "" : service.identity(uuid).title())
+                // Load-bearing no-op: see the class comment. Without this, typed text never
+                // reaches elementValues and the Set button reads the initial value forever.
+                .addEventListener(CustomUIEventBindingType.ValueChanged, String.class, v -> { });
+        tab = (TabContentBuilder) tab.addChild(field);
+
+        tab = (TabContentBuilder) tab.addChild(
+                smallButton("ChTitleSet", "Set title", 312, row * ROW_HEIGHT - 4,
+                        (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                setTitle(service, uuid, world, ctx, false)));
+        tab = (TabContentBuilder) tab.addChild(
+                smallButton("ChTitleClear", "Clear", 312 + BUY_WIDTH + 8, row * ROW_HEIGHT - 4,
+                        (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                setTitle(service, uuid, world, ctx, true)));
+        row += 2;
+
+        tab = (TabContentBuilder) tab.addChild(line(CHAT_COLOR_ID,
+                colorText(service, uuid), theme.heading(), row++));
+
+        int index = 0;
+        for (String hex : plugin.config().allowedChatColors()) {
+            CustomButtonBuilder swatch = (CustomButtonBuilder)
+                    CustomButtonBuilder.customTextButton()
+                            .withId("ChColor_" + index)
+                            .withAnchor(new HyUIAnchor()
+                                    .setTop((row + (index / 6)) * ROW_HEIGHT - 4)
+                                    .setLeft((index % 6) * (BUY_WIDTH + 8))
+                                    .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
+            String chosen = hex;
+            swatch = swatch.withText(hex)
+                    .withDefaultLabelStyle(theme.coloured(hex, true))
+                    .withDefaultBackground(theme.tabBackground())
+                    .withHoveredBackground(theme.tabHovered())
+                    .withPressedBackground(theme.tabPressed());
+            tab = (TabContentBuilder) tab.addChild(
+                    swatch.addEventListener(CustomUIEventBindingType.Activating,
+                            (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                    setColor(service, uuid, chosen, world, ctx)));
+            index++;
+        }
+        row += 1 + ((index - 1) / 6) + 1;
+
+        tab = (TabContentBuilder) tab.addChild(
+                smallButton("ChColorClear", "Default colour", 0, row * ROW_HEIGHT - 4,
+                        (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                setColor(service, uuid, null, world, ctx)));
+        return tab;
+    }
+
+    private void setTitle(SupporterService service, UUID uuid, World world,
+                          au.ellie.hyui.events.UIContext ctx, boolean clear) {
+        String note;
+        try {
+            String wanted = clear ? null
+                    : ctx.getValue(CHAT_FIELD_ID, String.class).orElse("").trim();
+            SupporterIdentity updated = service.setTitle(uuid, wanted);
+            note = updated.hasTitle() ? "Title set to: " + updated.title() : "Title cleared.";
+        } catch (IllegalArgumentException e) {
+            note = e.getMessage();
+        } catch (RuntimeException e) {
+            plugin.log().error("setTitle failed for " + uuid, e);
+            note = "Could not save your title - try /supporter title";
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                ctx.editById(CHAT_TITLE_ID, LabelBuilder.class,
+                        label -> label.withText(titleText(service, uuid)));
+                ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(message));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Chat tab refresh failed: " + t);
+            }
+        });
+    }
+
+    private void setColor(SupporterService service, UUID uuid, String hex, World world,
+                          au.ellie.hyui.events.UIContext ctx) {
+        String note;
+        try {
+            service.setChatColor(uuid, hex);
+            note = hex == null ? "Colour back to default." : "Chat colour set to " + hex + ".";
+        } catch (IllegalArgumentException e) {
+            note = e.getMessage();
+        } catch (RuntimeException e) {
+            plugin.log().error("setChatColor failed for " + uuid, e);
+            note = "Could not save your colour - try /supporter colour";
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                ctx.editById(CHAT_COLOR_ID, LabelBuilder.class,
+                        label -> label.withText(colorText(service, uuid)));
+                ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(message));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Chat tab refresh failed: " + t);
+            }
+        });
+    }
+
+    private String titleText(SupporterService service, UUID uuid) {
+        SupporterIdentity identity = service.identity(uuid);
+        return identity.hasTitle() ? "Title: " + identity.title() : "Title: none";
+    }
+
+    private String colorText(SupporterService service, UUID uuid) {
+        String hex = service.identity(uuid).chatColor();
+        return hex == null ? "Colour: default" : "Colour: " + hex;
+    }
+
+    private String toggleText(SupporterService service, UUID uuid) {
+        return service.identity(uuid).hideTrails()
+                ? "Others' trails: hidden" : "Others' trails: shown";
+    }
+
+    /** A right-aligned action button in the shop/trails row style. */
+    private CustomButtonBuilder smallButton(
+            String id, String text, int left, int top,
+            java.util.function.BiConsumer<Void, au.ellie.hyui.events.UIContext> onClick) {
+        CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
+                .withId(id)
+                .withAnchor(new HyUIAnchor().setTop(top).setLeft(left)
+                        .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
+        button = button.withText(text)
+                .withDefaultBackground(theme.tabBackground())
+                .withHoveredBackground(theme.tabHovered())
+                .withPressedBackground(theme.tabPressed());
+        return button.addEventListener(CustomUIEventBindingType.Activating, onClick);
     }
 
     private UIElementBuilder<?> aboutTab() {
