@@ -943,12 +943,14 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                             : com.peoplesserver.supportermod.ui.SkinChanger.apply(
                                     store, ref, uuid, tint[0], tint[1]);
                     if (result.applied()) {
-                        ok(ctx, off ? "Skin off — back to your own look."
+                        ok(ctx, off ? "Skin off - colour restored."
                                 : "Skin on: " + name + ". Third person to see it.");
-                        if (!off) {
-                            info(ctx, "Experimental: it resets when you relog, and "
-                                    + "/supporter skin off restores you any time.");
-                        }
+                        info(ctx, off
+                                ? "If your hair or clothes are still missing, relog - the "
+                                        + "server can only rebuild your full look at login."
+                                : "Statue mode: hair and clothing are packed away while it is "
+                                        + "on. Worn supporter gear still shows. /supporter skin "
+                                        + "off for your colour, relog for everything.");
                     } else {
                         err(ctx, "Skin change failed: " + result.detail());
                     }

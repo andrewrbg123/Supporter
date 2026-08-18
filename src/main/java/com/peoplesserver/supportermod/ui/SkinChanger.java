@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.asset.type.model.config.Model;
 import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
+import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import java.util.Map;
@@ -54,7 +55,19 @@ public final class SkinChanger {
         return new Result(true, gradientSet + "/" + gradientId);
     }
 
-    /** Pushes back the cached original. World thread only. */
+    /**
+     * Restores. World thread only.
+     *
+     * <p>Two pushes, because the cached model was never the full appearance. The live
+     * {@code ModelComponent} only ever held the base body plus face attachments — hair and
+     * clothing are composed CLIENT-side from the {@code PlayerSkin}, which is why the first
+     * live test of "off" returned the player's colour and nothing else. The client renders that
+     * composition until a model update arrives and switches it to model-only. So restore pushes
+     * the cached model back (colour) AND marks the {@code PlayerSkinComponent} network-outdated,
+     * on the theory that a fresh skin update flips the client back to composing the full look.
+     * If that theory fails live, relogging remains the always-correct restore, and the command
+     * says so either way.
+     */
     public static Result restore(Store<EntityStore> store, Ref<EntityStore> ref, UUID uuid) {
         Model original = ORIGINALS.remove(uuid);
         if (original == null) {
@@ -62,6 +75,11 @@ public final class SkinChanger {
                     "nothing to restore in this session — relogging restores your look");
         }
         store.putComponent(ref, ModelComponent.getComponentType(), new ModelComponent(original));
+        PlayerSkinComponent skin =
+                store.getComponent(ref, PlayerSkinComponent.getComponentType());
+        if (skin != null) {
+            skin.setNetworkOutdated();
+        }
         return new Result(true, "restored");
     }
 
