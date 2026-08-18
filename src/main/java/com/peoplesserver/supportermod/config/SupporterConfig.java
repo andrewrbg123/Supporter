@@ -88,6 +88,15 @@ public final class SupporterConfig {
      *
      * <p>The default is the node EliteEssentials reads for the home limit. Add others here as
      * more permission-gated perks appear — no code change needed.
+     *
+     * <p><b>Changing a node here leaves the old one behind.</b> The sync writes what this list
+     * says, and its revoke path clears what this list says — so a node you remove from the list
+     * is no longer known to either, and lingers in LuckPerms until its own expiry runs out,
+     * roughly a month. That matters for the home limit in particular, because EliteEssentials
+     * takes the HIGHEST matching {@code …home.limit.<N>}: dropping supporters from 10 to 7 has
+     * no effect at all while the old {@code limit.10} is still there. Unset it from existing
+     * supporters by hand — {@code lp user <name> permission unsettemp <old node>}, with
+     * {@code unsettemp} rather than {@code unset} because these nodes carry an expiry.
      */
     private List<String> luckPermsNodes = List.of("eliteessentials.command.home.limit.10");
 
