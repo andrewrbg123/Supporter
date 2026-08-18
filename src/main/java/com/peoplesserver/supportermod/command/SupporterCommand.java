@@ -19,6 +19,7 @@ import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.ReconcileReport;
 import com.peoplesserver.supportermod.core.SupporterRecord;
 import com.peoplesserver.supportermod.core.SupporterService;
+import com.peoplesserver.supportermod.ui.CapeSpike;
 import java.awt.Color;
 import java.util.List;
 import java.util.Optional;
@@ -75,6 +76,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
         addSubCommand(new ReconcileSub(plugin));
+        // SPIKE, remove with CapeSpike once the attachment question is answered.
+        addSubCommand(new CapeTestSub(plugin));
     }
 
     /**
@@ -931,6 +934,67 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 err(ctx, "Grant failed: " + e.getMessage());
                 plugin.log().error("Purchase grant failed for " + username + " txn " + txn, e);
             }
+        }
+    }
+
+    /**
+     * {@code /supporter capetest <texture|reset>} — a temporary experiment, admin only.
+     *
+     * <p>Answers whether a {@link com.peoplesserver.supportermod.ui.CapeSpike model attachment}
+     * layers a cape onto a player or is treated as a weighted pool. Delete this along with
+     * {@code CapeSpike} once that is known.
+     *
+     * <p>Deliberately takes the texture as an argument so different paths can be tried without a
+     * rebuild — which matters, because the most likely failure is a texture the client cannot
+     * resolve, and that is indistinguishable from "attachments do not layer" unless you can try
+     * several.
+     */
+    public static final class CapeTestSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument textureArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public CapeTestSub(SupporterPlugin plugin) {
+            super("capetest", "SPIKE: attach a cape model to yourself. 'reset' to undo.");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+            this.textureArg = withRequiredArg("texture", "texture path, or reset",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        /**
+         * Player-only, unlike the other admin subcommands.
+         *
+         * <p>{@code grant} extends {@code CommandBase} because Tebex runs it from the console.
+         * This one changes the caller's own model, so it needs a player and a world — and
+         * {@code AbstractPlayerCommand} hands both over rather than making us resolve them.
+         */
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            String texture = String.valueOf(ctx.get(textureArg)).trim();
+            boolean reset = texture.equalsIgnoreCase("reset");
+
+            // Handed to the world thread even though this may already be on it: component reads
+            // and writes are world-thread only, and being explicit costs nothing.
+            world.execute(() -> {
+                try {
+                    CapeSpike.Result result =
+                            CapeSpike.apply(store, ref, reset ? null : texture);
+                    if (result.applied()) {
+                        ok(ctx, "capetest: " + result.detail());
+                        info(ctx, reset
+                                ? "Third person to confirm it is gone."
+                                : "Third person, then say which: a cape, nothing at all, or "
+                                        + "part of your character replaced.");
+                    } else {
+                        err(ctx, "capetest failed: " + result.detail());
+                    }
+                } catch (Throwable t) {
+                    err(ctx, "capetest threw: " + t);
+                    plugin.log().error("capetest failed", t);
+                }
+            });
         }
     }
 
