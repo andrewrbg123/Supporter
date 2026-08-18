@@ -548,8 +548,10 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    /supporter trail <name>, /supporter shop");
             info(ctx, "  A supporter cape — 6 designs");
             info(ctx, "    /supporter cape");
-            info(ctx, "  Supporter hats — crown and cowboy");
+            info(ctx, "  Headwear — crown, cowboy hat and shades");
             info(ctx, "    /supporter hat");
+            info(ctx, "  Supporter trainers");
+            info(ctx, "    /supporter shoes — or the panel Wardrobe tab for all of it");
             info(ctx, "  Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "  Tokens: " + config.tokensPerMonth() + " per month of support");
@@ -616,7 +618,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    A chat tag, your own title and chat colour");
             info(ctx, "    Particle trails — " + config.trails().size() + " to choose from");
             info(ctx, "    A supporter cape — 6 designs, /supporter cape");
-            info(ctx, "    Supporter hats — crown and cowboy, /supporter hat");
+            info(ctx, "    Headwear and trainers — crown, cowboy, shades, trainers");
             info(ctx, "    Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "    " + config.tokensPerMonth()
@@ -686,7 +688,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
          * Design name → item id, matching Server/Item/Items/Armor/Cloak/ in our asset pack.
          * Insertion order is display order.
          */
-        static final java.util.Map<String, String> DESIGNS = new java.util.LinkedHashMap<>();
+        public static final java.util.Map<String, String> DESIGNS = new java.util.LinkedHashMap<>();
 
         static {
             DESIGNS.put("amber", "Supporter_Cape");
@@ -783,7 +785,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     public static final class HatSub extends PublicPlayerCommand {
 
         /** Hat name → item id, matching Server/Item/Items/Armor/ in our asset pack. */
-        static final java.util.Map<String, String> HATS = new java.util.LinkedHashMap<>();
+        public static final java.util.Map<String, String> HATS = new java.util.LinkedHashMap<>();
 
         static {
             HATS.put("crown", "Supporter_Crown");
@@ -873,7 +875,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     public static final class ShoesSub extends PublicPlayerCommand {
 
         /** Shoe name → item id, matching Server/Item/Items/Armor/ in our asset pack. */
-        static final java.util.Map<String, String> SHOES = new java.util.LinkedHashMap<>();
+        public static final java.util.Map<String, String> SHOES = new java.util.LinkedHashMap<>();
 
         static {
             SHOES.put("trainers", "Supporter_Trainers");

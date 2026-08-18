@@ -12,13 +12,19 @@ import au.ellie.hyui.builders.TabNavigationBuilder;
 import au.ellie.hyui.builders.TextFieldBuilder;
 import au.ellie.hyui.builders.UIElementBuilder;
 
+import com.hypixel.hytale.component.Ref;
+
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.transaction.ItemStackTransaction;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import com.peoplesserver.supportermod.SupporterPlugin;
+import com.peoplesserver.supportermod.command.SupporterCommand;
 import com.peoplesserver.supportermod.config.SupporterConfig;
 import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.SupporterRecord;
@@ -69,7 +75,7 @@ public final class SupporterPanel {
     private static final int ROW_HEIGHT = 38;
 
     /** Tab hit area. Text-only tabs were too small a target on the first live build. */
-    private static final int TAB_WIDTH = 142; // six tabs across the wider panel
+    private static final int TAB_WIDTH = 120; // seven tabs across the bar since the Wardrobe tab
     private static final int TAB_HEIGHT = 42;
     private static final int TAB_SPACING = 10;
 
@@ -121,6 +127,7 @@ public final class SupporterPanel {
             root = (GroupBuilder) root.addChild(shopTab(service, uuid, world));
             root = (GroupBuilder) root.addChild(trailsTab(service, uuid, world));
             root = (GroupBuilder) root.addChild(chatTab(service, uuid, world));
+            root = (GroupBuilder) root.addChild(wardrobeTab(service, uuid, playerRef, world));
             root = (GroupBuilder) root.addChild(notice());
             root = (GroupBuilder) root.addChild(aboutTab());
 
@@ -178,6 +185,7 @@ public final class SupporterPanel {
                 .addTab("shop", "Shop", tabButton("shop"))
                 .addTab("trails", "Trails", tabButton("trails"))
                 .addTab("chat", "Chat", tabButton("chat"))
+                .addTab("wardrobe", "Wardrobe", tabButton("wardrobe"))
                 .addTab("about", "About", tabButton("about"))
                 .withId(TABS_ID)
                 .withAnchor(new HyUIAnchor().setTop(80).setLeft(PAD)
@@ -277,7 +285,8 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("PkCape",
                 "A supporter cape - 6 designs, /supporter cape", theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkHat",
-                "Supporter hats - crown and cowboy, /supporter hat", theme.body(), row++));
+                "Headwear - crown, cowboy, shades - and trainers: the Wardrobe tab",
+                theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkHomes",
                 "Homes: " + config.supporterHomeSlots()
                         + " instead of " + config.defaultHomeSlots(), theme.body(), row++));
@@ -814,6 +823,153 @@ public final class SupporterPanel {
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
         return button.addEventListener(CustomUIEventBindingType.Activating, onClick);
+    }
+
+    // --- wardrobe tab ---------------------------------------------------------------------
+
+    /**
+     * Cape design → base colour, mirroring CapeTextureGen's palette so each button's label wears
+     * its cape's colour. Hard-coded rather than derived from allowedChatColors, because an admin
+     * can edit that config list but the cape textures are fixed at build time.
+     */
+    private static final java.util.Map<String, String> CAPE_COLORS = new java.util.LinkedHashMap<>();
+
+    static {
+        CAPE_COLORS.put("amber", "#FFAA00");
+        CAPE_COLORS.put("frost", "#55FFFF");
+        CAPE_COLORS.put("rose", "#FF55FF");
+        CAPE_COLORS.put("jade", "#55FF55");
+        CAPE_COLORS.put("gold", "#FFFF55");
+        CAPE_COLORS.put("ember", "#FF5555");
+    }
+
+    /**
+     * Every wearable, one Get button each — the chat commands' item maps are the single source
+     * of truth, so a wearable added to a command appears here without panel changes.
+     *
+     * <p><b>Delivery runs entirely on the world thread.</b> {@code Player.giveItem} reads
+     * inventory components, and component access is world-thread only — the same rule as
+     * {@code updatePage}, so the whole callback hands off in one hop. The entity {@code Ref} is
+     * resolved fresh at click time rather than captured at build time, because a panel can
+     * outlive a respawn.
+     */
+    private UIElementBuilder<?> wardrobeTab(SupporterService service, UUID uuid,
+                                            PlayerRef playerRef, World world) {
+        TabContentBuilder tab = content("wardrobe");
+        int row = 0;
+
+        if (!service.isSupporter(uuid)) {
+            tab = (TabContentBuilder) tab.addChild(line("WdLocked",
+                    "The wardrobe is a supporter perk. The About tab explains how to get it.",
+                    theme.dim(), row));
+            return tab;
+        }
+
+        tab = (TabContentBuilder) tab.addChild(line("WdCapes",
+                "Capes — one chest item at a time", theme.heading(), row++));
+        int index = 0;
+        for (java.util.Map.Entry<String, String> cape
+                : SupporterCommand.CapeSub.DESIGNS.entrySet()) {
+            String hex = CAPE_COLORS.getOrDefault(cape.getKey(), SupporterTheme.INK_BODY);
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    "WdCape_" + cape.getKey(), cape.getKey(), theme.swatchLabel(hex),
+                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) -> giveWearable(
+                            service, uuid, playerRef, "Cape (" + cape.getKey() + ")",
+                            cape.getValue(), world, ctx)));
+            index++;
+        }
+        row += 2;
+
+        tab = (TabContentBuilder) tab.addChild(line("WdHats",
+                "Headwear — one head item at a time", theme.heading(), row++));
+        index = 0;
+        for (java.util.Map.Entry<String, String> hat : SupporterCommand.HatSub.HATS.entrySet()) {
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    "WdHat_" + hat.getKey(), hat.getKey(), theme.buttonLabel(),
+                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) -> giveWearable(
+                            service, uuid, playerRef, "Headwear (" + hat.getKey() + ")",
+                            hat.getValue(), world, ctx)));
+            index++;
+        }
+        row += 2;
+
+        tab = (TabContentBuilder) tab.addChild(line("WdShoes",
+                "Feet — uses the legs armour slot", theme.heading(), row++));
+        index = 0;
+        for (java.util.Map.Entry<String, String> shoe
+                : SupporterCommand.ShoesSub.SHOES.entrySet()) {
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    "WdShoe_" + shoe.getKey(), shoe.getKey(), theme.buttonLabel(),
+                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) -> giveWearable(
+                            service, uuid, playerRef, "Footwear (" + shoe.getKey() + ")",
+                            shoe.getValue(), world, ctx)));
+            index++;
+        }
+        row += 2;
+
+        tab = (TabContentBuilder) tab.addChild(line("WdNote",
+                "Everything here is cosmetic — zero protection, and each shares a slot with "
+                        + "real armour, so take it off before a fight. Lost something? "
+                        + "Get it again, free, as often as you like.",
+                theme.dim(), row));
+        return tab;
+    }
+
+    private CustomButtonBuilder wearButton(String id, String text, HyUIStyle labelStyle,
+                                           int left, int top,
+                                           java.util.function.BiConsumer<Void,
+                                                   au.ellie.hyui.events.UIContext> onClick) {
+        CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
+                .withId(id)
+                .withAnchor(new HyUIAnchor().setTop(top).setLeft(left)
+                        .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
+        button = button.withText(text)
+                .withDefaultLabelStyle(labelStyle)
+                .withHoveredLabelStyle(labelStyle)
+                .withPressedLabelStyle(labelStyle)
+                .withDefaultBackground(theme.tabBackground())
+                .withHoveredBackground(theme.tabHovered())
+                .withPressedBackground(theme.tabPressed());
+        return button.addEventListener(CustomUIEventBindingType.Activating, onClick);
+    }
+
+    private void giveWearable(SupporterService service, UUID uuid, PlayerRef playerRef,
+                              String label, String itemId, World world,
+                              au.ellie.hyui.events.UIContext ctx) {
+        world.execute(() -> {
+            String note;
+            try {
+                if (!service.isSupporter(uuid)) {
+                    note = "The wardrobe is a supporter perk — see the About tab.";
+                } else {
+                    Ref<EntityStore> ref = playerRef.getReference();
+                    if (ref == null || ref.getStore() == null) {
+                        note = "Could not reach your inventory — try the chat command instead.";
+                    } else {
+                        ItemStackTransaction tx = Player.giveItem(
+                                new ItemStack(itemId, 1), ref, ref.getStore());
+                        ItemStack remainder = tx == null ? null : tx.getRemainder();
+                        note = remainder != null && !remainder.isEmpty()
+                                ? "No room in your inventory — clear a slot and try again."
+                                : label + " delivered — check your inventory.";
+                    }
+                }
+            } catch (Throwable t) {
+                plugin.log().error("Wardrobe delivery failed for " + uuid
+                        + " (" + itemId + ")", t);
+                note = "Delivery failed — try the chat command instead.";
+            }
+            String message = note;
+            try {
+                ctx.editById(NOTICE_ID, LabelBuilder.class, l -> l.withText(message));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Wardrobe notice refresh failed: " + t);
+            }
+        });
     }
 
     private UIElementBuilder<?> aboutTab() {
