@@ -276,6 +276,8 @@ public final class SupporterPanel {
                 theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkCape",
                 "A supporter cape - 6 designs, /supporter cape", theme.body(), row++));
+        tab = (TabContentBuilder) tab.addChild(line("PkHat",
+                "Supporter hats - crown and cowboy, /supporter hat", theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkHomes",
                 "Homes: " + config.supporterHomeSlots()
                         + " instead of " + config.defaultHomeSlots(), theme.body(), row++));

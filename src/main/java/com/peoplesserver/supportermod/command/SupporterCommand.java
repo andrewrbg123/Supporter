@@ -547,6 +547,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    /supporter trail <name>, /supporter shop");
             info(ctx, "  A supporter cape — 6 designs");
             info(ctx, "    /supporter cape");
+            info(ctx, "  Supporter hats — crown and cowboy");
+            info(ctx, "    /supporter hat");
             info(ctx, "  Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "  Tokens: " + config.tokensPerMonth() + " per month of support");
@@ -613,6 +615,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    A chat tag, your own title and chat colour");
             info(ctx, "    Particle trails — " + config.trails().size() + " to choose from");
             info(ctx, "    A supporter cape — 6 designs, /supporter cape");
+            info(ctx, "    Supporter hats — crown and cowboy, /supporter hat");
             info(ctx, "    Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "    " + config.tokensPerMonth()
