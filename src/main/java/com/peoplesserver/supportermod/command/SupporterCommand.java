@@ -73,6 +73,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new PerksSub(plugin));
         addSubCommand(new CapeSub(plugin));
         addSubCommand(new HatSub(plugin));
+        addSubCommand(new ShoesSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
@@ -847,6 +848,94 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (Throwable t) {
                 err(ctx, "Could not deliver the hat: " + t.getMessage());
                 plugin.log().error("Hat delivery failed for " + player.getUuid(), t);
+            }
+        }
+    }
+
+    // --- /supporter shoes ---------------------------------------------------------------------
+
+    /**
+     * {@code /supporter shoes} — footwear, in the LEGS slot because the game has no feet slot.
+     *
+     * <p>That makes this the steepest cosmetic trade-off in the plugin and worth being explicit
+     * about: {@code ItemArmorSlot} defines Head, Chest, Hands, Legs and nothing else, vanilla
+     * "boots" are Legs-slot items, and even the cheapest wool pair carries +13 Health and
+     * resistances. Wearing cosmetic trainers therefore costs real protection — same rule as the
+     * cape and hats, dialled up. The item hides only the cosmetic Shoes part, not Pants, so
+     * trousers stay visible.
+     *
+     * <p>Third self-authored model and the first animated one: two root bones (L-Calf/R-Calf)
+     * with foot anchors the walk cycle drives, positions copied digit-for-digit from the vanilla
+     * Bronze legs model because those numbers are the bone binding.
+     */
+    public static final class ShoesSub extends PublicPlayerCommand {
+
+        /** Shoe name → item id, matching Server/Item/Items/Armor/ in our asset pack. */
+        static final java.util.Map<String, String> SHOES = new java.util.LinkedHashMap<>();
+
+        static {
+            SHOES.put("trainers", "Supporter_Trainers");
+        }
+
+        public ShoesSub(SupporterPlugin plugin) {
+            super("shoes", "Your supporter footwear: " + String.join(", ", SHOES.keySet()));
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"trainers"});
+            addUsageVariant(new ShoeDesignVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            ok(ctx, "Footwear: " + String.join(", ", SHOES.keySet()));
+            info(ctx, "/supporter shoes <name> to get a pair. They use the legs armour slot.");
+        }
+    }
+
+    /** The {@code /supporter shoes <name>} form. */
+    public static final class ShoeDesignVariant extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument nameArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public ShoeDesignVariant(SupporterPlugin plugin) {
+            super("Get supporter footwear.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.nameArg = withRequiredArg("shoe", "footwear name", (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(player.getUuid())) {
+                err(ctx, "Footwear is a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            String name = String.valueOf(ctx.get(nameArg)).trim().toLowerCase();
+            String itemId = ShoesSub.SHOES.get(name);
+            if (itemId == null) {
+                err(ctx, "No such footwear. Choose from: "
+                        + String.join(", ", ShoesSub.SHOES.keySet()));
+                return;
+            }
+            try {
+                ItemStackTransaction tx = Player.giveItem(new ItemStack(itemId, 1), ref, store);
+                ItemStack remainder = tx == null ? null : tx.getRemainder();
+                if (remainder != null && !remainder.isEmpty()) {
+                    err(ctx, "No room in your inventory — clear a slot and try again.");
+                    return;
+                }
+                ok(ctx, "Supporter " + name + " delivered. Wear them in your legs slot.");
+                info(ctx, "They give no protection at all — that slot is real armour on anyone "
+                        + "else, so take them off before a fight. Lost them? Run this again.");
+            } catch (Throwable t) {
+                err(ctx, "Could not deliver: " + t.getMessage());
+                plugin.log().error("Shoe delivery failed for " + player.getUuid(), t);
             }
         }
     }
