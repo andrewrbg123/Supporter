@@ -77,6 +77,8 @@ public final class SupporterPanel {
 
     private static final String BALANCE_ID = "SupBalance";
     private static final String NOTICE_ID = "SupNotice";
+    private static final String STATUS_TOKENS_ID = "StTokens";
+    private static final String STATUS_UNLOCKS_ID = "StUnlocks";
 
     private final SupporterPlugin plugin;
     private final SupporterTheme theme;
@@ -228,17 +230,24 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("StTotal",
                 r.totalDays() + " day(s) total, all time", theme.dim(), row + 1));
         row += 3;
-        tab = (TabContentBuilder) tab.addChild(line("StTokens",
-                service.tokenBalance(uuid) + " token(s) to spend", theme.body(), row++));
-        // Name them, do not count them. "1 unlock(s) owned" was the first thing anybody asked
-        // about after seeing this panel, which is a fair sign that a bare count answers nothing.
-        java.util.List<String> unlocks = service.unlocks(uuid);
-        tab = (TabContentBuilder) tab.addChild(line("StUnlocks",
-                unlocks.isEmpty()
-                        ? "No trails bought yet - the free ones are yours already"
-                        : "Trails bought: " + String.join(", ", unlocks),
-                theme.dim(), row));
+        tab = (TabContentBuilder) tab.addChild(line(STATUS_TOKENS_ID,
+                balanceText(service, uuid), theme.body(), row++));
+        tab = (TabContentBuilder) tab.addChild(line(STATUS_UNLOCKS_ID,
+                unlocksText(service, uuid), theme.dim(), row));
         return tab;
+    }
+
+    /**
+     * Name the trails, do not count them.
+     *
+     * <p>"1 unlock(s) owned" was the first thing anybody asked about after seeing this panel,
+     * which is a fair sign that a bare count answers nothing.
+     */
+    private String unlocksText(SupporterService service, UUID uuid) {
+        List<String> unlocks = service.unlocks(uuid);
+        return unlocks.isEmpty()
+                ? "No trails bought yet - the free ones are yours already"
+                : "Trails bought: " + String.join(", ", unlocks);
     }
 
     private UIElementBuilder<?> perksTab(SupporterService service, UUID uuid) {
@@ -375,7 +384,7 @@ public final class SupporterPanel {
         String note = message;
         world.execute(() -> {
             try {
-                refreshShop(service, uuid, ctx, note);
+                refreshAfterPurchase(service, uuid, ctx, note);
             } catch (Throwable t) {
                 plugin.log().warn("Shop panel refresh failed: " + t);
             }
@@ -383,18 +392,26 @@ public final class SupporterPanel {
     }
 
     /**
-     * Rewrites every part of the shop that a purchase can change.
+     * Rewrites every part of the panel that a purchase can change — on every tab.
      *
-     * <p><b>Every row, not just the one that was bought.</b> Spending tokens changes the shortfall
-     * on all the others — buying snow at 150 took gold from "need 50 more" to "need 200 more" —
-     * and it can take a button from affordable to not. The first build only refreshed the row that
-     * was clicked, so the purchased item kept its Buy button and the other rows quietly lied until
-     * the panel was closed and reopened.
+     * <p><b>Every row, not just the one that was bought</b>, because spending changes the shortfall
+     * on all the others: buying snow at 150 took gold from "need 50 more" to "need 200 more". And
+     * <b>the Status tab too</b>, because it shows the same balance and the list of trails owned.
+     * Both of those were learned the same way and in the same order — 0.8.2 refreshed one row and
+     * left the rest lying, 0.8.3 refreshed the shop and left the Status tab reporting 200 tokens
+     * while the shop correctly showed 0.
+     *
+     * <p>A page is a snapshot. Anything derived from state that a click changes has to be listed
+     * here, or it silently keeps showing the world as it was when the panel opened.
      */
-    private void refreshShop(SupporterService service, UUID uuid,
-                             au.ellie.hyui.events.UIContext ctx, String note) {
+    private void refreshAfterPurchase(SupporterService service, UUID uuid,
+                                      au.ellie.hyui.events.UIContext ctx, String note) {
         ctx.editById(BALANCE_ID, LabelBuilder.class,
                 label -> label.withText(balanceText(service, uuid)));
+        ctx.editById(STATUS_TOKENS_ID, LabelBuilder.class,
+                label -> label.withText(balanceText(service, uuid)));
+        ctx.editById(STATUS_UNLOCKS_ID, LabelBuilder.class,
+                label -> label.withText(unlocksText(service, uuid)));
         for (String id : plugin.config().trails().keySet()) {
             ctx.editById(rowId(id), LabelBuilder.class,
                     label -> label.withText(rowText(service, uuid, id))
