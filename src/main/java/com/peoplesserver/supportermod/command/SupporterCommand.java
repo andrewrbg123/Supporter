@@ -74,6 +74,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new CapeSub(plugin));
         addSubCommand(new HatSub(plugin));
         addSubCommand(new ShoesSub(plugin));
+        addSubCommand(new ChainSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
@@ -788,10 +789,12 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         static {
             HATS.put("crown", "Supporter_Crown");
             HATS.put("cowboy", "Supporter_Hat_Cowboy");
+            HATS.put("shades", "Supporter_Shades");
+            HATS.put("earrings", "Supporter_Earrings");
         }
 
         public HatSub(SupporterPlugin plugin) {
-            super("hat", "Your supporter hats: " + String.join(", ", HATS.keySet()));
+            super("hat", "Your supporter headwear: " + String.join(", ", HATS.keySet()));
             setPermissionGroup(GameMode.Adventure);
             addAliases(new String[] {"hats", "crown"});
             addUsageVariant(new HatDesignVariant(plugin));
@@ -800,7 +803,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                                PlayerRef player, World world) {
-            ok(ctx, "Hats: " + String.join(", ", HATS.keySet()));
+            ok(ctx, "Headwear: " + String.join(", ", HATS.keySet()));
+            info(ctx, "One head item at a time - the head slot holds one thing.");
             info(ctx, "/supporter hat <name> to get one.");
         }
     }
@@ -848,6 +852,57 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (Throwable t) {
                 err(ctx, "Could not deliver the hat: " + t.getMessage());
                 plugin.log().error("Hat delivery failed for " + player.getUuid(), t);
+            }
+        }
+    }
+
+    // --- /supporter chain ---------------------------------------------------------------------
+
+    /**
+     * {@code /supporter chain} — a gold chain with a ruby-set medallion, in the CHEST slot.
+     *
+     * <p>Chest already belongs to the capes, and that is the point of saying so in the delivery
+     * message: one chest item at a time, so the chain is worn <em>instead of</em> a cape. The
+     * model anchors to the same Chest bone the cape geometry uses, with the chain hanging at the
+     * front where the cape hangs at the back.
+     */
+    public static final class ChainSub extends PublicPlayerCommand {
+        static final String CHAIN_ITEM_ID = "Supporter_Chain";
+
+        private final SupporterPlugin plugin;
+
+        public ChainSub(SupporterPlugin plugin) {
+            super("chain", "Get your supporter chain (worn instead of a cape).");
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"necklace"});
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            if (!service.isSupporter(player.getUuid())) {
+                err(ctx, "The chain is a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            try {
+                ItemStackTransaction tx =
+                        Player.giveItem(new ItemStack(CHAIN_ITEM_ID, 1), ref, store);
+                ItemStack remainder = tx == null ? null : tx.getRemainder();
+                if (remainder != null && !remainder.isEmpty()) {
+                    err(ctx, "No room in your inventory — clear a slot and try again.");
+                    return;
+                }
+                ok(ctx, "Supporter chain delivered. Wear it in your chest slot.");
+                info(ctx, "It shares the slot with capes and chest armour — chain OR cape, "
+                        + "and no protection either way. Lost it? Run this again.");
+            } catch (Throwable t) {
+                err(ctx, "Could not deliver the chain: " + t.getMessage());
+                plugin.log().error("Chain delivery failed for " + player.getUuid(), t);
             }
         }
     }

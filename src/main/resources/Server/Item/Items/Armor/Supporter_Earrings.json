@@ -1,0 +1,27 @@
+{
+  "TranslationProperties": {
+    "Name": "Supporter Earrings",
+    "Description": "Gold earrings for the people who keep this server running. Purely cosmetic - no protection, and they use the head slot."
+  },
+  "Parent": "Armor_Cloth_Wool_Head",
+  "ItemLevel": 1,
+  "Icon": "Icons/ItemsGenerated/Supporter_Earrings.png",
+  "IconProperties": {
+    "Scale": 0.4,
+    "Rotation": [22.5, 47.815, 22.5],
+    "Translation": [4, -55]
+  },
+  "Model": "Items/Armor/Supporter_Earrings.blockymodel",
+  "Texture": "Items/Armor/Supporter_Earrings.png",
+  "Armor": {
+    "ArmorSlot": "Head",
+    "BaseDamageResistance": 0,
+    "CosmeticsToHide": ["EarAccessory"]
+  },
+  "Tags": {
+    "Type": ["Armor"],
+    "Family": ["Cloth_Wool"]
+  },
+  "MaxDurability": 0,
+  "ItemSoundSetId": "ISS_Armor_Cloth"
+}
