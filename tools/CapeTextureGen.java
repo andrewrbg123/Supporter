@@ -26,9 +26,11 @@ import javax.imageio.ImageIO;
  * Cape3  44x24 at (44,71)   — bottom sway segment
  * </pre>
  *
- * <p>So the crown is centred in Cape1, which is the upper back. Nothing samples the sheet above
- * y=10 or left of x=40 — which is how the first version's "highlight line" at y=6 turned out to
- * be invisible in game. Decorating outside the mapped regions decorates nothing.
+ * <p>Each quad DECLARES the UV of its inner face; the outer face — the one players see — is
+ * mirrored to the LEFT of that offset. The vanilla texture paints all its art in the left half
+ * of the sheet for exactly this reason, and the first emblem attempt proved it the hard way by
+ * rendering a crown on the cape lining. The crown therefore sits in the outer region of Cape1,
+ * centred on the upper back.
  *
  * <p><b>Six designs, one per allowed chat colour.</b> The palette comes from the plugin's own
  * {@code allowedChatColors} rather than being invented, so a supporter can match their cape to
@@ -41,11 +43,22 @@ public final class CapeTextureGen {
     private static final int TEX_H = 96;
     private static final int ICON = 64;
 
-    /** The main back panel's UV region, read from the model. */
+    /**
+     * The main back panel: quad Cape1, 36x35, declared UV offset (40,10).
+     *
+     * <p><b>The declared offset is the INNER face.</b> The face players actually see — the
+     * outside of the cape — samples the mirrored region to the LEFT of the offset, x4..40.
+     * Proven two ways: the vanilla Cape_Long_Texture paints all of its art in the left half of
+     * the sheet, and a crown drawn at the declared offset rendered only as three small marks
+     * where its top rows overlapped the collar strip — the rest was on the cape lining, facing
+     * the player back.
+     */
     private static final int PANEL_X = 40;
     private static final int PANEL_Y = 10;
     private static final int PANEL_W = 36;
     private static final int PANEL_H = 35;
+    /** Left edge of the OUTER face region: mirrored across the declared offset. */
+    private static final int OUTER_X = PANEL_X - PANEL_W;
 
     /**
      * The crown, 13x9 cells, drawn at scale 2 (26x18 pixels) on the back panel. Outlined dark and
@@ -107,11 +120,15 @@ public final class CapeTextureGen {
         g.setColor(trim);
         g.fillRect(0, TEX_H - 2, TEX_W, 2);
 
-        // Collar accent: the top row of Cape1's region — the only "top" that is actually mapped.
+        // Collar accent, spanning both collar faces: the outer collar mirrors to x10..40, the
+        // inner strip is x40..70.
         g.setColor(highlight);
-        g.fillRect(PANEL_X, PANEL_Y + 1, PANEL_W, 1);
+        g.fillRect(10, PANEL_Y + 1, 60, 1);
 
-        drawCrown(g, PANEL_X + (PANEL_W - CROWN[0].length() * 2) / 2,
+        // The crown goes on the OUTER face region — see OUTER_X. Drawing it at the declared
+        // offset paints the lining instead, which is how the first build put the crown on the
+        // inside of the cape.
+        drawCrown(g, OUTER_X + (PANEL_W - CROWN[0].length() * 2) / 2,
                 PANEL_Y + (PANEL_H - CROWN.length * 2) / 2 + 1, 2, trim, highlight);
 
         g.dispose();
