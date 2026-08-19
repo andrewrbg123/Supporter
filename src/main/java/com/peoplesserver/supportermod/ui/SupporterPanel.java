@@ -417,17 +417,33 @@ public final class SupporterPanel {
         }
         row += Math.max(1, (index + 5) / 6);
 
-        tab = (TabContentBuilder) tab.addChild(line("ShopPetsHead",
-                "Pets — cosmetic followers; wear them from the Wardrobe tab",
-                theme.heading(), row++));
+        // Gear and pets share one section since 0.22.2: thirteen priced pets need three grid
+        // rows, and the header this merge saves is what keeps the tab at the 13-row ceiling.
+        // One story anyway — the Wardrobe is where both get worn. Five per row at 176 wide:
+        // "tortoise · 400" (14 characters) renders full-size, and 5 x 176 + 4 x 8 = 912,
+        // flush with the content width.
+        tab = (TabContentBuilder) tab.addChild(line("ShopGearHead",
+                "Gear and pets — the Wardrobe tab has them", theme.heading(), row++));
         index = 0;
-        // Five per row at 176 wide: "tortoise · 400" (14 characters) renders full-size at
-        // 176, and five columns keep nine pets to two rows — 5 x 176 + 4 x 8 = 912, flush
-        // with the content width.
+        for (String name : gearNames()) {
+            int cost = config.gearCost(name);
+            if (cost <= 0) {
+                continue;
+            }
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    gearBuyId(name), name + " · " + cost, theme.buttonLabel(),
+                    (index % 5) * (176 + 8),
+                    (row + (index / 5)) * ROW_HEIGHT - 4,
+                    176,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                            buyGear(service, uuid, name, cost, world, ctx))
+                    .withVisible(!service.ownsGear(uuid, name, cost)));
+            index++;
+        }
         for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
             int cost = config.petCost(petName);
             if (cost <= 0) {
-                continue;
+                continue; // the free pair are not shop items; the Wardrobe has them
             }
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     petBuyId(petName), petName + " · " + cost, theme.buttonLabel(),
@@ -440,26 +456,6 @@ public final class SupporterPanel {
             index++;
         }
         row += Math.max(1, (index + 4) / 5);
-
-        tab = (TabContentBuilder) tab.addChild(line("ShopGearHead",
-                "Gear — capes and hats; the Wardrobe tab delivers them", theme.heading(), row++));
-        index = 0;
-        for (String name : gearNames()) {
-            int cost = config.gearCost(name);
-            if (cost <= 0) {
-                continue;
-            }
-            tab = (TabContentBuilder) tab.addChild(wearButton(
-                    gearBuyId(name), name + " · " + cost, theme.buttonLabel(),
-                    (index % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
-                    (row + (index / SKIN_COLS)) * ROW_HEIGHT - 4,
-                    SKIN_BUY_WIDTH,
-                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
-                            buyGear(service, uuid, name, cost, world, ctx))
-                    .withVisible(!service.ownsGear(uuid, name, cost)));
-            index++;
-        }
-        row += Math.max(1, (index + SKIN_COLS - 1) / SKIN_COLS);
 
         tab = (TabContentBuilder) tab.addChild(line("ShopSkinsHead",
                 "Skins — tints and costumes; wear them from the Wardrobe tab",
@@ -1276,7 +1272,7 @@ public final class SupporterPanel {
                 (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                 (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
                         service, uuid, playerRef, null, world, ctx)));
-        row += 3;
+        row += 4; // sixteen buttons, three grid rows since 0.22.2
 
         // Tighter gap than the other sections: the rack is three rows deep and the panel
         // notice line sits below the content area.

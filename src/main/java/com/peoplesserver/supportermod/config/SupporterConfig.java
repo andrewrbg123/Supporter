@@ -570,10 +570,11 @@ public final class SupporterConfig {
     }
 
     /**
-     * Pet name → cost in tokens. Pets are the premium tier — every one is priced, and the
-     * bunny is the deliberate entry point (two days of dailies). Own {@code pet:} unlock
-     * namespace; same grandfathering rule as everything else: the tick re-spawns a stored
-     * choice without re-checking ownership.
+     * Pet name → cost in tokens; absent or 0 means free. Chick and piglet ship free so every
+     * supporter has a companion immediately — the trails/tints shape — and the rest are the
+     * premium ladder up to the 450 flagships. Own {@code pet:} unlock namespace; same
+     * grandfathering rule as everything else: the tick re-spawns a stored choice without
+     * re-checking ownership.
      */
     private Map<String, Integer> petCosts = defaultPetCosts();
 
@@ -595,6 +596,12 @@ public final class SupporterConfig {
         out.put("duck", 300);
         out.put("meerkat", 400);
         out.put("tortoise", 400);
+        out.put("chick", 0);   // the free pair — a supporter's first companion
+        out.put("piglet", 0);
+        out.put("rat", 250);
+        out.put("gecko", 300);
+        out.put("lamb", 350);
+        out.put("goat", 350);
         return out;
     }
 

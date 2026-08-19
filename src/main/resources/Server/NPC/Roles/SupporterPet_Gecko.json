@@ -1,0 +1,67 @@
+{
+  "Comment": "Supporter pet spike: cosmetic follower. Type Generic = NO combat tree, so a pet cannot fight, aggro or be commanded to - the pay-to-win line, enforced by the role type itself. The follow is the FactionMod-proven ReadPosition/Seek recipe: the plugin stamps the owner's position into slot 0 each tick and the engine's own A* walks there, routing around obstacles. MinRange keeps it from crowding the owner; the Any/Nothing fallback idles it when close. No DropList: it drops nothing.",
+  "Type": "Generic",
+  "Appearance": "Gecko",
+  "MotionControllerList": [
+    {
+      "Type": "Walk",
+      "MaxWalkSpeed": 7,
+      "Gravity": 10,
+      "MaxFallSpeed": 20,
+      "Acceleration": 12,
+      "MaxClimbHeight": 1.3,
+      "JumpHeight": 1.5,
+      "MinJumpHeight": 1,
+      "JumpForce": 1.5,
+      "MaxDropHeight": 4,
+      "RunThreshold": 0.3,
+      "MaxRotationSpeed": 360
+    }
+  ],
+  "MaxHealth": { "Compute": "MaxHealth" },
+  "Parameters": {
+    "MaxHealth": {
+      "Value": 1000,
+      "Description": "Pets are not for killing"
+    }
+  },
+  "Instructions": [
+    {
+      "Instructions": [
+        {
+          "Sensor": {
+            "Type": "ReadPosition",
+            "Slot": "PetOwner",
+            "Range": 4096,
+            "MinRange": 2.0
+          },
+          "BodyMotion": {
+            "Type": "Seek",
+            "RelativeSpeed": 1.0,
+            "StopDistance": 2.0,
+            "SlowDownDistance": 4,
+            "RecomputeDistance": 0,
+            "Reachable": false,
+            "MaxTotalNodes": 2000,
+            "MaxOpenNodes": 600,
+            "MaxPathLength": 400,
+            "StepsPerTick": 80,
+            "DiagonalMoves": true,
+            "UseBestPath": true,
+            "BuildOptimisedPath": true,
+            "PathSmoothing": 1.0
+          }
+        },
+        {
+          "Sensor": {
+            "Type": "Any"
+          },
+          "BodyMotion": {
+            "Type": "Nothing"
+          }
+        }
+      ]
+    }
+  ],
+  "NameTranslationKey": "server.npcRoles.Gecko.name"
+}

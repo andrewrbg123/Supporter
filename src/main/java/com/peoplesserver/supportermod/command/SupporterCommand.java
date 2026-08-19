@@ -1137,6 +1137,14 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             PETS.put("frog", "SupporterPet_Frog");
             PETS.put("duck", "SupporterPet_Duck");
             PETS.put("tortoise", "SupporterPet_Tortoise");
+            // 0.22.2: chick and piglet are the FREE pair — every supporter gets a companion
+            // immediately, tokens buy the menagerie, the same shape as trails and tints.
+            PETS.put("chick", "SupporterPet_Chick");
+            PETS.put("piglet", "SupporterPet_Piglet");
+            PETS.put("rat", "SupporterPet_Rat");
+            PETS.put("gecko", "SupporterPet_Gecko");
+            PETS.put("lamb", "SupporterPet_Lamb");
+            PETS.put("goat", "SupporterPet_Goat");
         }
 
         private final SupporterPlugin plugin;
