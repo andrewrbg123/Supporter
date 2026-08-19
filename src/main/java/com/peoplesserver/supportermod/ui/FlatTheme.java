@@ -55,6 +55,8 @@ public final class FlatTheme {
 
     public static final String GREEN = "#4ADE80";
     public static final String GREEN_TEXT = "#7EE7A3";
+    /** The design's owned/complete tint: green at .05. */
+    public static final String OWNED_BG = "#4ADE800D";
 
     private final String accent;
     private final String accentBright;
@@ -86,6 +88,11 @@ public final class FlatTheme {
 
     public String accentNav() {
         return accentNav;
+    }
+
+    /** Chip hover: the accent at .08, the design's lift without the animation. */
+    public String accentHover() {
+        return alpha(accent, 0.08);
     }
 
     // --- the primitive ---------------------------------------------------------------------
@@ -241,6 +248,26 @@ public final class FlatTheme {
                 .setRenderBold(active)
                 .setWrap(false)
                 .setTextColor(active ? accentBright : INK_SECONDARY);
+    }
+
+    /** The mid-size numeral used for "what you are wearing" headlines. */
+    public HyUIStyle numeralSmall(String colour) {
+        return new HyUIStyle()
+                .setFontSize(24f)
+                .setRenderBold(true)
+                .setWrap(false)
+                .setTextColor(colour);
+    }
+
+    /** Chip labels: shrink rather than truncate, because names here reach twelve characters. */
+    public HyUIStyle chipLabel(String colour) {
+        return new HyUIStyle()
+                .setFontSize(14f)
+                .setShrinkTextToFit(true)
+                .setMinShrinkTextToFitFontSize(9f)
+                .setWrap(false)
+                .setTextColor(colour)
+                .setAlignment(Alignment.Center);
     }
 
     /** The token value in the rail's wallet block. */
