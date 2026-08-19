@@ -1248,7 +1248,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         private final SupporterPlugin plugin;
 
         public UitestSub(SupporterPlugin plugin) {
-            super("uitest", "ADMIN: fill-primitive probe (1-3), or 'old' for the original panel.");
+            super("uitest", "ADMIN: UI probes (1-5), or 'old' for the original panel.");
             setPermissionGroup(GameMode.Creative);
             this.plugin = plugin;
             addUsageVariant(new UitestArgVariant(plugin));
@@ -1262,8 +1262,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             for (String line : com.peoplesserver.supportermod.ui.FlatProbe.DESCRIPTIONS) {
                 info(ctx, "  " + line);
             }
-            info(ctx, "Run /supporter uitest 1 first and stop at the first that draws a solid "
-                    + "block. 'old' opens the original panel for comparison.");
+            info(ctx, "1-3 settled the fill primitive. 4 and 5 are the open question: does "
+                    + "TopScrolling scroll, and do absolute positions survive it?");
+            info(ctx, "'old' opens the original panel for comparison.");
         }
     }
 
@@ -1312,8 +1313,11 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                         + com.peoplesserver.supportermod.ui.FlatProbe.DESCRIPTIONS.length + ".");
                 return;
             }
-            info(ctx, "Probe " + variant + ": if you stay connected and see a solid block, "
-                    + "this construct works.");
+            info(ctx, variant >= 4
+                    ? "Probe " + variant + ": check the rows are EVENLY SPACED (absolute "
+                            + "positions survived), then try the mouse wheel over them."
+                    : "Probe " + variant + ": if you stay connected and see a solid block, "
+                            + "this construct works.");
             if (!com.peoplesserver.supportermod.ui.FlatProbe.open(plugin, player, store, variant)) {
                 err(ctx, "Probe " + variant + " could not be built server-side.");
             }
