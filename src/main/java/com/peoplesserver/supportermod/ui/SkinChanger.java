@@ -130,10 +130,58 @@ public final class SkinChanger {
         }
 
         PlayerSkin live = component.getPlayerSkin();
-        ORIGINAL_SKINS.putIfAbsent(uuid, new PlayerSkin(live));
+        if (!isCostumeSkin(live)) {
+            // Live is the player's own look — refresh the original. OVERWRITE rather than
+            // putIfAbsent: every genuine login captures the freshest account truth, so a
+            // character edited between sessions restores to its NEW look.
+            ORIGINAL_SKINS.put(uuid, new PlayerSkin(live));
+        }
+        // else: live is ALREADY a costume. Seen live on 2026-08-19: one connection fired
+        // PlayerReady twice, 37 seconds apart, with no account rebuild between — the second
+        // re-apply captured zorro itself as the "original", and /supporter skin off then
+        // "restored" zorro. A costumed skin is never capture-worthy; keep what we have.
         copyInto(preset, live);
         component.setNetworkOutdated();
         return new Result(true, "costume " + key);
+    }
+
+    /**
+     * Whether this live skin IS one of the parsed costumes — by reference, and that is the
+     * trick: {@link #copyInto} assigns the preset's field <em>objects</em> into the live skin,
+     * so an applied costume's fields are identity-equal to its parsed preset, while an account
+     * rebuild (a genuine relog) always creates fresh objects and never matches. Only parsed
+     * costumes can be live, because applying is what parses them.
+     */
+    private static boolean isCostumeSkin(PlayerSkin live) {
+        for (PlayerSkin preset : COSTUME_PARSED.values()) {
+            if (samePartRefs(live, preset)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean samePartRefs(PlayerSkin a, PlayerSkin b) {
+        return a.bodyCharacteristic == b.bodyCharacteristic
+                && a.underwear == b.underwear
+                && a.face == b.face
+                && a.eyes == b.eyes
+                && a.ears == b.ears
+                && a.mouth == b.mouth
+                && a.facialHair == b.facialHair
+                && a.haircut == b.haircut
+                && a.eyebrows == b.eyebrows
+                && a.pants == b.pants
+                && a.overpants == b.overpants
+                && a.undertop == b.undertop
+                && a.overtop == b.overtop
+                && a.shoes == b.shoes
+                && a.headAccessory == b.headAccessory
+                && a.faceAccessory == b.faceAccessory
+                && a.earAccessory == b.earAccessory
+                && a.skinFeature == b.skinFeature
+                && a.gloves == b.gloves
+                && a.cape == b.cape;
     }
 
     /** All twenty cosmetic part fields — {@code PlayerSkin}'s fields are public and mutable. */
@@ -194,10 +242,29 @@ public final class SkinChanger {
             return new Result(false, "no model to tint");
         }
         Model live = component.getModel();
-        ORIGINALS.putIfAbsent(uuid, live);
-        Model tinted = rebuild(ORIGINALS.get(uuid), gradientSet, gradientId);
+        if (!isTintedModel(live)) {
+            // Same rule as the costumes: capture only the player's own look, overwriting so
+            // each genuine login refreshes the truth. A live model already wearing one of our
+            // gradients (the double-PlayerReady re-apply) must never become the "original".
+            ORIGINALS.put(uuid, live);
+        }
+        Model base = ORIGINALS.get(uuid);
+        if (base == null) {
+            base = live; // tinted with nothing captured — swapping the gradient is still safe
+        }
+        Model tinted = rebuild(base, gradientSet, gradientId);
         store.putComponent(ref, ModelComponent.getComponentType(), new ModelComponent(tinted));
         return new Result(true, gradientSet + "/" + gradientId);
+    }
+
+    /** Whether this model wears one of OUR gradients — player skin tones never use them. */
+    private static boolean isTintedModel(Model live) {
+        for (String[] tint : SKINS.values()) {
+            if (tint[0].equals(live.getGradientSet()) && tint[1].equals(live.getGradientId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -239,12 +306,6 @@ public final class SkinChanger {
                     "nothing to restore in this session — relogging restores your look");
         }
         return new Result(true, "restored");
-    }
-
-    /** Drops both restore caches without pushing — at login, the account rebuild is the truth. */
-    public static void forget(UUID uuid) {
-        ORIGINALS.remove(uuid);
-        ORIGINAL_SKINS.remove(uuid);
     }
 
     /**

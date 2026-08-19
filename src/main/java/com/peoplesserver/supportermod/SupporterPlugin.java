@@ -348,7 +348,12 @@ public final class SupporterPlugin extends JavaPlugin {
             // seconds later the composition is stable. The scheduler thread only resolves the
             // world before handing the component work to world.execute — the trail system's
             // split.
-            com.peoplesserver.supportermod.ui.SkinChanger.forget(uuid);
+            // 0.21.2: this hook no longer wipes the restore caches. Wiping them here was the
+            // 0.18.1 answer to stale originals, but one connection can fire PlayerReady TWICE
+            // with no account rebuild between (seen live, 37s apart) — the wipe destroyed the
+            // good capture and the re-apply then captured the COSTUME as the "original".
+            // SkinChanger now refreshes the original only when the live look is verifiably
+            // the player's own, which covers staleness and the double-ready both.
             try {
                 com.peoplesserver.supportermod.core.SupporterIdentity identity =
                         current.identity(uuid);
