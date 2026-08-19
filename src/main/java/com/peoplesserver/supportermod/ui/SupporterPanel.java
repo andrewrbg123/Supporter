@@ -83,6 +83,15 @@ public final class SupporterPanel {
     private static final int BUY_WIDTH = 120;
     private static final int BUY_HEIGHT = 32;
 
+    /**
+     * The Shop's skin grid uses wider buttons than everything else: the labels carry a price
+     * suffix ("jack-sparrow · 300" is 18 characters) and the shrink-to-fit label style renders
+     * those at half size inside a 120-wide button. 200 fits the longest label at full size;
+     * four per row keeps the grid inside the 912 content width.
+     */
+    private static final int SKIN_BUY_WIDTH = 200;
+    private static final int SKIN_COLS = 4;
+
     private static final String BALANCE_ID = "SupBalance";
     private static final String NOTICE_ID = "SupNotice";
     private static final String STATUS_TOKENS_ID = "StTokens";
@@ -379,8 +388,9 @@ public final class SupporterPanel {
             }
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     skinBuyId(skinName), skinName + " · " + cost, theme.buttonLabel(),
-                    (skinIndex % 6) * (BUY_WIDTH + 8),
-                    (row + (skinIndex / 6)) * ROW_HEIGHT - 4,
+                    (skinIndex % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
+                    (row + (skinIndex / SKIN_COLS)) * ROW_HEIGHT - 4,
+                    SKIN_BUY_WIDTH,
                     (Void v, au.ellie.hyui.events.UIContext ctx) ->
                             buySkin(service, uuid, skinName, cost, world, ctx))
                     .withVisible(skinBuyVisible(service, uuid, skinName, cost)));
@@ -1095,10 +1105,17 @@ public final class SupporterPanel {
                                            int left, int top,
                                            java.util.function.BiConsumer<Void,
                                                    au.ellie.hyui.events.UIContext> onClick) {
+        return wearButton(id, text, labelStyle, left, top, BUY_WIDTH, onClick);
+    }
+
+    private CustomButtonBuilder wearButton(String id, String text, HyUIStyle labelStyle,
+                                           int left, int top, int width,
+                                           java.util.function.BiConsumer<Void,
+                                                   au.ellie.hyui.events.UIContext> onClick) {
         CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
                 .withId(id)
                 .withAnchor(new HyUIAnchor().setTop(top).setLeft(left)
-                        .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
+                        .setWidth(width).setHeight(BUY_HEIGHT));
         button = button.withText(text)
                 .withDefaultLabelStyle(labelStyle)
                 .withHoveredLabelStyle(labelStyle)
