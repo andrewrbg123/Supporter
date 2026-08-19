@@ -511,13 +511,18 @@ public final class FlatPanel {
         return tab;
     }
 
+    /** The label a Shop chip takes once bought — one place, so it matches how it was built. */
+    private static String ownedLabel(String name) {
+        return name + " · owned";
+    }
+
     /** Shop chips are five per row: prices make the longest labels 18 characters. */
     private CustomButtonBuilder shopChip(String id, String name, int cost, boolean owned,
                                          int index, int y, BiConsumer<Void, UIContext> onClick) {
         int w = (BODY_W - 40) / 5;
         int x = PAD + ((index % 5) * (w + 10));
         int top = y + ((index / 5) * CHIP_ROW);
-        String label = owned ? name + " · owned" : name + " · " + cost;
+        String label = owned ? ownedLabel(name) : name + " · " + cost;
         return chip(id, label, x, top, w,
                 owned ? FlatTheme.GREEN_TEXT : FlatTheme.INK_BODY,
                 owned ? FlatTheme.OWNED_BG : FlatTheme.CHIP_BG, onClick);
@@ -599,9 +604,11 @@ public final class FlatPanel {
         }
 
         if (q.claimable()) {
-            tab = (GroupBuilder) tab.addChild(chip("FlatQClaim" + n, "CLAIM",
+            String claimId = "FlatQClaim" + n;
+            tab = (GroupBuilder) tab.addChild(chip(claimId, "CLAIM",
                     PAD + BODY_W - 130, y + 12, 110, FlatTheme.GREEN_TEXT, FlatTheme.OWNED_BG,
-                    (Void v, UIContext ctx) -> claimQuest(service, uuid, q.key(), world, ctx)));
+                    (Void v, UIContext ctx) ->
+                            claimQuest(service, uuid, q.key(), claimId, world, ctx)));
         } else {
             tab = (GroupBuilder) tab.addChild(text("FlatQState" + n,
                     q.claimed() ? "CLAIMED" : "",
@@ -943,8 +950,11 @@ public final class FlatPanel {
     private void buyTrail(SupporterService service, UUID uuid, String id, World world,
                           UIContext ctx) {
         String note;
+        boolean bought = false;
         try {
-            note = switch (service.purchaseTrail(uuid, id)) {
+            SupporterService.PurchaseResult result = service.purchaseTrail(uuid, id);
+            bought = result == SupporterService.PurchaseResult.BOUGHT;
+            note = switch (result) {
                 case BOUGHT -> "Bought " + id + " - wear it from the Trails tab.";
                 case ALREADY_OWNED -> "You already own " + id + ".";
                 case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + id + ".";
@@ -955,15 +965,19 @@ public final class FlatPanel {
             plugin.log().error("Trail purchase failed for " + uuid, e);
             note = "Purchase failed - try /supporter buy " + id;
         }
-        finish(service, uuid, world, ctx, note);
+        finish(service, uuid, world, ctx, note, "FlatBuyT_" + id, ownedLabel(id), bought);
     }
 
     private void buyGear(SupporterService service, UUID uuid, String name, int cost,
                          World world, UIContext ctx) {
         String note;
+        boolean bought = false;
         try {
-            note = switch (service.purchaseGear(uuid, name, cost)) {
-                case BOUGHT -> "Unlocked " + name + " - the Wardrobe tab delivers it.";
+            SupporterService.PurchaseResult result = service.purchaseGear(uuid, name, cost);
+            bought = result == SupporterService.PurchaseResult.BOUGHT;
+            note = switch (result) {
+                case BOUGHT -> "Unlocked " + name
+                        + " - reopen the panel and the Wardrobe will have it.";
                 case ALREADY_OWNED -> "You already own " + name + ".";
                 case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + name + ".";
                 case FREE -> name + " is free - the Wardrobe tab has it.";
@@ -973,15 +987,19 @@ public final class FlatPanel {
             plugin.log().error("Gear purchase failed for " + uuid, e);
             note = "Purchase failed - try /supporter buy " + name;
         }
-        finish(service, uuid, world, ctx, note);
+        finish(service, uuid, world, ctx, note, "FlatBuyG_" + name, ownedLabel(name), bought);
     }
 
     private void buyPet(SupporterService service, UUID uuid, String name, int cost,
                         World world, UIContext ctx) {
         String note;
+        boolean bought = false;
         try {
-            note = switch (service.purchasePet(uuid, name, cost)) {
-                case BOUGHT -> "Unlocked " + name + " - bring it out from the Wardrobe tab.";
+            SupporterService.PurchaseResult result = service.purchasePet(uuid, name, cost);
+            bought = result == SupporterService.PurchaseResult.BOUGHT;
+            note = switch (result) {
+                case BOUGHT -> "Unlocked " + name
+                        + " - reopen the panel and the Wardrobe will have it.";
                 case ALREADY_OWNED -> "You already own " + name + ".";
                 case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + name + ".";
                 case FREE -> name + " is free - the Wardrobe tab has it.";
@@ -991,15 +1009,19 @@ public final class FlatPanel {
             plugin.log().error("Pet purchase failed for " + uuid, e);
             note = "Purchase failed - try /supporter buy " + name;
         }
-        finish(service, uuid, world, ctx, note);
+        finish(service, uuid, world, ctx, note, "FlatBuyP_" + name, ownedLabel(name), bought);
     }
 
     private void buySkin(SupporterService service, UUID uuid, String name, int cost,
                          World world, UIContext ctx) {
         String note;
+        boolean bought = false;
         try {
-            note = switch (service.purchaseSkin(uuid, name, cost)) {
-                case BOUGHT -> "Unlocked " + name + " - wear it from the Wardrobe tab.";
+            SupporterService.PurchaseResult result = service.purchaseSkin(uuid, name, cost);
+            bought = result == SupporterService.PurchaseResult.BOUGHT;
+            note = switch (result) {
+                case BOUGHT -> "Unlocked " + name
+                        + " - reopen the panel and the Wardrobe will have it.";
                 case ALREADY_OWNED -> "You already own " + name + ".";
                 case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + name + ".";
                 case FREE -> name + " is free - the Wardrobe tab has it.";
@@ -1009,14 +1031,17 @@ public final class FlatPanel {
             plugin.log().error("Skin purchase failed for " + uuid, e);
             note = "Purchase failed - try /supporter buy " + name;
         }
-        finish(service, uuid, world, ctx, note);
+        finish(service, uuid, world, ctx, note, "FlatBuyS_" + name, ownedLabel(name), bought);
     }
 
-    private void claimQuest(SupporterService service, UUID uuid, String key, World world,
-                            UIContext ctx) {
+    private void claimQuest(SupporterService service, UUID uuid, String key, String claimId,
+                            World world, UIContext ctx) {
         String note;
+        boolean claimed = false;
         try {
-            note = switch (service.claimQuest(uuid, key)) {
+            SupporterService.QuestClaimResult result = service.claimQuest(uuid, key);
+            claimed = result == SupporterService.QuestClaimResult.CLAIMED;
+            note = switch (result) {
                 case CLAIMED -> "Quest complete - tokens added to your balance!";
                 case NOT_DONE -> "Not finished yet - keep going.";
                 case ALREADY_CLAIMED -> "Already claimed.";
@@ -1027,7 +1052,9 @@ public final class FlatPanel {
             plugin.log().error("Quest claim failed for " + uuid, e);
             note = "Claim failed - try again in a moment.";
         }
-        finish(service, uuid, world, ctx, note);
+        // A claimed quest's button becomes its own receipt, so the row cannot be clicked twice
+        // and look like it did nothing the second time.
+        finish(service, uuid, world, ctx, note, claimId, "CLAIMED", claimed);
     }
 
     private void wearTrail(SupporterService service, UUID uuid, String id, World world,
@@ -1268,19 +1295,35 @@ public final class FlatPanel {
     }
 
     /**
-     * Every purchase changes the same three things — the wallet, the notice, and whether the
-     * chip that was clicked still offers to sell. The chip is left alone deliberately: it is
-     * rebuilt correctly the next time the panel opens, and rewriting one chip's label and
-     * colour mid-grid is the kind of partial refresh that has produced stale UI here before.
+     * Rewrites everything a purchase changes: the wallet, the notice, and the chip that was
+     * clicked — which flips to its owned styling in place, so a buy is visibly a buy.
+     *
+     * <p>Only the clicked chip is touched, and that is a property of this design rather than
+     * restraint: prices here do not depend on the balance, so no other Shop chip can go stale.
+     * (The old panel had to rewrite every row because each one showed how much more you needed.)
+     *
+     * <p><b>The Wardrobe is the deliberate exception.</b> It builds only what you own, so there
+     * is no hidden chip waiting to be revealed — the alternative, keeping locked chips built and
+     * hidden, is exactly what left those sections with two blank rows. So gear, pet and skin
+     * purchases say plainly that the Wardrobe has the new item on the next open, rather than
+     * pretending the panel is fully live.
      */
     private void finish(SupporterService service, UUID uuid, World world, UIContext ctx,
-                        String note) {
+                        String note, String chipId, String newChipLabel, boolean bought) {
         world.execute(() -> {
             try {
                 ctx.editById(WALLET_ID, LabelBuilder.class,
                         l -> l.withText(String.valueOf(service.tokenBalance(uuid))));
-                ctx.editById(NOTICE_ID, LabelBuilder.class,
-                        l -> l.withText(note + "  (reopen the panel to refresh the shop)"));
+                if (bought && chipId != null) {
+                    HyUIStyle ownedStyle = theme.chipLabel(FlatTheme.GREEN_TEXT);
+                    ctx.editById(chipId, CustomButtonBuilder.class, b -> b
+                            .withText(newChipLabel)
+                            .withDefaultLabelStyle(ownedStyle)
+                            .withHoveredLabelStyle(ownedStyle)
+                            .withPressedLabelStyle(ownedStyle)
+                            .withDefaultBackground(theme.fill(FlatTheme.OWNED_BG)));
+                }
+                ctx.editById(NOTICE_ID, LabelBuilder.class, l -> l.withText(note));
                 ctx.updatePage(false);
             } catch (Throwable t) {
                 plugin.log().warn("Purchase refresh failed: " + t);

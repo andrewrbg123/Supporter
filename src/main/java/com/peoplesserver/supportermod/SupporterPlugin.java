@@ -456,6 +456,19 @@ public final class SupporterPlugin extends JavaPlugin {
         if (!hyUiPresent()) {
             return false;
         }
+        // 0.25.0: the redesign is what /supporter opens. The original panel stays as the
+        // FALLBACK rather than being deleted — it is proven, it is already written, and a
+        // player whose panel fails to build should lose the new look, not the feature. Three
+        // rungs: redesign, original panel, chat.
+        try {
+            if (new com.peoplesserver.supportermod.ui.FlatPanel(this)
+                    .open(player, store, world)) {
+                return true;
+            }
+            log.warn("Redesigned panel did not open; falling back to the original panel");
+        } catch (Throwable t) {
+            log.warn("Redesigned panel unavailable, falling back to the original: " + t);
+        }
         try {
             return new SupporterPanel(this).open(player, store, world);
         } catch (Throwable t) {
@@ -465,19 +478,17 @@ public final class SupporterPlugin extends JavaPlugin {
     }
 
     /**
-     * Opens the 0.23.0 redesign spike — the flat-colour shell with only its Status screen.
-     * Separate entry point on purpose: the live panel above must keep working untouched while
-     * the new look is judged in game.
+     * Opens the ORIGINAL panel, kept reachable for comparison now that {@code /supporter}
+     * opens the redesign.
      */
-    public boolean openFlatPanel(PlayerRef player, Store<EntityStore> store, World world) {
+    public boolean openLegacyPanel(PlayerRef player, Store<EntityStore> store, World world) {
         if (!hyUiPresent()) {
             return false;
         }
         try {
-            return new com.peoplesserver.supportermod.ui.FlatPanel(this)
-                    .open(player, store, world);
+            return new SupporterPanel(this).open(player, store, world);
         } catch (Throwable t) {
-            log.warn("Flat panel unavailable: " + t);
+            log.warn("Legacy panel unavailable: " + t);
             return false;
         }
     }

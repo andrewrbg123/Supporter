@@ -1248,7 +1248,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         private final SupporterPlugin plugin;
 
         public UitestSub(SupporterPlugin plugin) {
-            super("uitest", "ADMIN: fill-primitive probe (1-5), or 'full' for the Status screen.");
+            super("uitest", "ADMIN: fill-primitive probe (1-3), or 'old' for the original panel.");
             setPermissionGroup(GameMode.Creative);
             this.plugin = plugin;
             addUsageVariant(new UitestArgVariant(plugin));
@@ -1263,7 +1263,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 info(ctx, "  " + line);
             }
             info(ctx, "Run /supporter uitest 1 first and stop at the first that draws a solid "
-                    + "block. 'full' opens the Status screen once a variant works.");
+                    + "block. 'old' opens the original panel for comparison.");
         }
     }
 
@@ -1286,11 +1286,16 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                                PlayerRef player, World world) {
             String which = String.valueOf(ctx.get(whichArg)).trim().toLowerCase();
             if (which.equals("full")) {
-                if (plugin.openFlatPanel(player, store, world)) {
-                    info(ctx, "Redesign preview open. Judge the surfaces - the nav is inert and "
-                            + "only Status is built.");
+                info(ctx, "The redesign is now what /supporter opens. 'old' shows the "
+                        + "original panel for comparison.");
+                return;
+            }
+            if (which.equals("old") || which.equals("legacy")) {
+                if (plugin.openLegacyPanel(player, store, world)) {
+                    info(ctx, "The original panel, kept as the fallback if the redesign ever "
+                            + "fails to build.");
                 } else {
-                    err(ctx, "Could not open the preview - HyUI may be unavailable.");
+                    err(ctx, "Could not open the original panel.");
                 }
                 return;
             }
