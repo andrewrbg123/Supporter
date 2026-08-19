@@ -397,8 +397,15 @@ public final class SupporterPanel {
         return plugin.config().skinCost(skinName, SkinChanger.isCostume(skinName));
     }
 
+    /**
+     * Visible while UNOWNED — affordability deliberately does not hide it. The trail buttons
+     * hide when unaffordable because their text rows still show the item and its price; these
+     * buttons ARE the listing, so hiding them left a header over an empty shop for anyone with
+     * no tokens, while the Wardrobe pointed straight at it. Clicking one you cannot afford says
+     * so in the notice line instead.
+     */
     private boolean skinBuyVisible(SupporterService service, UUID uuid, String name, int cost) {
-        return !service.ownsSkin(uuid, name, cost) && service.tokenBalance(uuid) >= cost;
+        return !service.ownsSkin(uuid, name, cost);
     }
 
     private void buySkin(SupporterService service, UUID uuid, String skinName, int cost,
@@ -996,6 +1003,9 @@ public final class SupporterPanel {
         }
         row += 2;
 
+        // Tighter gap than the other sections: the rack is three rows deep and the panel
+        // notice line sits below the content area.
+        row--;
         tab = (TabContentBuilder) tab.addChild(line("WdSkins",
                 "Body skins — statue mode; stays on across relogs", theme.heading(), row++));
         index = 0;
@@ -1012,13 +1022,9 @@ public final class SupporterPanel {
                 (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                 (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
                         service, uuid, playerRef, null, world, ctx)));
-        row += 2 + (index / 6);
-
-        tab = (TabContentBuilder) tab.addChild(line("WdNote",
-                "Everything here is cosmetic — zero protection, and each shares a slot with "
-                        + "real armour, so take it off before a fight. Lost something? "
-                        + "Get it again, free, as often as you like.",
-                theme.dim(), row));
+        // The cosmetic disclaimer that used to sit here was cut when the skin rack grew to
+        // three rows and pushed it into the panel notice line - the About tab carries the same
+        // ground rules, and the notice line needs to stay clear for purchase feedback.
         return tab;
     }
 
