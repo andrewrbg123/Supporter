@@ -29,26 +29,32 @@ import au.ellie.hyui.builders.HyUIStyle;
 public final class FlatTheme {
 
     /**
-     * The fill texture. ColorPickerFill ships ONLY as {@code @2x} — every other texture this
-     * plugin references has a base-name twin — so whether the client resolves the base name is
-     * genuinely unknown, and the spike panel carries a labelled swatch strip to answer it. A
-     * texture that fails to resolve renders nothing rather than erroring, so the failure mode
-     * is a panel with no surfaces, not a crash.
+     * The fill texture, and the hard lesson behind this particular path.
+     *
+     * <p>0.23.0 pointed this at {@code Common/ColorPickerFill.png} and <b>the client
+     * disconnected</b>: "CustomUI Set command couldn't set value ... .Background". A texture
+     * the client cannot resolve does NOT degrade to an unstyled element — the property set
+     * fails, and a failed set drops the player out of the server. That correction matters more
+     * than the texture choice: <b>every texture path must be one that provably exists</b>,
+     * because the cost of a wrong one is a disconnect, not a blank box.
+     *
+     * <p>ColorPickerFill exists only as {@code @2x}; the paths this plugin has proven live
+     * (Popup, PopupTitle, Buttons/Secondary) are all base-named files under the client's
+     * {@code Common/UI/Custom/} root. {@code CircularProgressBarMask.png} is such a file, and
+     * it carries a solid 8x8 block of pure opaque white at (113,39) — verified pixel by pixel
+     * — which is all a stretched fill needs.
      */
-    public static final String FILL_TEXTURE = "Common/ColorPickerFill.png";
+    public static final String FILL_TEXTURE = "Common/CircularProgressBarMask.png";
 
-    /** Candidates the spike's diagnostic strip renders, in order. */
-    public static final String[] FILL_CANDIDATES = {
-        "Common/ColorPickerFill.png",
-        "Common/ColorPickerFill@2x.png",
-        "UI/Custom/Common/ColorPickerFill@2x.png",
-        "Common/CircularProgressBarMask.png",
-    };
+    /** The solid-white block inside {@link #FILL_TEXTURE}. */
+    public static final int FILL_X = 113;
+    public static final int FILL_Y = 39;
+    public static final int FILL_SIZE = 8;
 
-    /** The solid-white block inside the fill texture: x16..31, y16..31. */
-    private static final int FILL_X = 16;
-    private static final int FILL_Y = 16;
-    private static final int FILL_SIZE = 16;
+    /** Same shape, in the backup texture — also base-named, also verified solid white. */
+    public static final String FILL_TEXTURE_ALT = "Common/WIPIcon.png";
+    public static final int FILL_ALT_X = 47;
+    public static final int FILL_ALT_Y = 90;
 
     // --- palette (design tokens, pre-blended where the design used alpha) -----------------
 
@@ -104,18 +110,22 @@ public final class FlatTheme {
 
     /** A solid rectangle of {@code hex}. The whole design is built out of these. */
     public HyUIPatchStyle fill(String hex) {
-        return fill(hex, FILL_TEXTURE);
+        return slice(FILL_TEXTURE, FILL_X, FILL_Y, hex);
     }
 
-    /** As {@link #fill(String)}, with an explicit texture — used by the diagnostic strip. */
-    public HyUIPatchStyle fill(String hex, String texturePath) {
-        return new HyUIPatchStyle()
+    /**
+     * A tinted slice of a texture: the white block stretched over the element.
+     *
+     * <p>Border 0 means no nine-slice — there is nothing to preserve in a uniform block, and
+     * slicing an 8px region into corners would leave nothing for the centre.
+     */
+    public HyUIPatchStyle slice(String texturePath, int x, int y, String hex) {
+        HyUIPatchStyle style = new HyUIPatchStyle()
                 .setTexturePath(texturePath)
-                .setAreaX(FILL_X).setAreaY(FILL_Y)
+                .setAreaX(x).setAreaY(y)
                 .setAreaWidth(FILL_SIZE).setAreaHeight(FILL_SIZE)
-                // Border 0: no nine-slice, just stretch the solid block over the whole element.
-                .setBorder(0)
-                .setColor(hex);
+                .setBorder(0);
+        return hex == null ? style : style.setColor(hex);
     }
 
     // --- colour maths ----------------------------------------------------------------------

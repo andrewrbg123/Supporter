@@ -1248,22 +1248,70 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         private final SupporterPlugin plugin;
 
         public UitestSub(SupporterPlugin plugin) {
-            super("uitest", "ADMIN: preview the redesigned panel (Status screen only).");
+            super("uitest", "ADMIN: fill-primitive probe (1-5), or 'full' for the Status screen.");
             setPermissionGroup(GameMode.Creative);
             this.plugin = plugin;
+            addUsageVariant(new UitestArgVariant(plugin));
         }
 
         @Override
         protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
                                PlayerRef player, World world) {
-            if (plugin.openFlatPanel(player, store, world)) {
-                info(ctx, "Redesign preview open. Judge the surfaces, not the wiring - the nav "
-                        + "is inert and only Status is built.");
-                info(ctx, "Check the probe strip at the bottom: whichever swatches are visible "
-                        + "name the fill texture path that resolves.");
+            ok(ctx, "Fill-primitive probe. A value the client cannot apply DISCONNECTS you - "
+                    + "that is how 0.23.0 failed - so these run one at a time.");
+            for (String line : com.peoplesserver.supportermod.ui.FlatProbe.DESCRIPTIONS) {
+                info(ctx, "  " + line);
+            }
+            info(ctx, "Run /supporter uitest 1 first and stop at the first that draws a solid "
+                    + "block. 'full' opens the Status screen once a variant works.");
+        }
+    }
+
+    /** The {@code /supporter uitest <1-5|full>} form. */
+    public static final class UitestArgVariant extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument whichArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public UitestArgVariant(SupporterPlugin plugin) {
+            super("Run one probe variant, or 'full' for the Status screen.");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+            this.whichArg = withRequiredArg("which", "1-5, or full",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            String which = String.valueOf(ctx.get(whichArg)).trim().toLowerCase();
+            if (which.equals("full")) {
+                if (plugin.openFlatPanel(player, store, world)) {
+                    info(ctx, "Redesign preview open. Judge the surfaces - the nav is inert and "
+                            + "only Status is built.");
+                } else {
+                    err(ctx, "Could not open the preview - HyUI may be unavailable.");
+                }
                 return;
             }
-            err(ctx, "Could not open the preview - HyUI may be unavailable.");
+            int variant;
+            try {
+                variant = Integer.parseInt(which);
+            } catch (NumberFormatException e) {
+                err(ctx, "Give a probe number 1-5, or 'full'.");
+                return;
+            }
+            if (variant < 1 || variant > com.peoplesserver.supportermod.ui.FlatProbe
+                    .DESCRIPTIONS.length) {
+                err(ctx, "No such probe. Choose 1-"
+                        + com.peoplesserver.supportermod.ui.FlatProbe.DESCRIPTIONS.length + ".");
+                return;
+            }
+            info(ctx, "Probe " + variant + ": if you stay connected and see a solid block, "
+                    + "this construct works.");
+            if (!com.peoplesserver.supportermod.ui.FlatProbe.open(plugin, player, store, variant)) {
+                err(ctx, "Probe " + variant + " could not be built server-side.");
+            }
         }
     }
 

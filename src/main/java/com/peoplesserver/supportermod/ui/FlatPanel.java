@@ -180,7 +180,6 @@ public final class FlatPanel {
                 box("FlatHeadRule", FlatTheme.HAIRLINE, 0, 110, CONTENT_W, 1));
 
         col = statusBody(col, service, uuid);
-        col = probeStrip(col);
         return col;
     }
 
@@ -275,30 +274,6 @@ public final class FlatPanel {
                         "+" + (items.size() - 4) + " more",
                         theme.small(FlatTheme.INK_MUTED), 434, x + 16, collW - 32, 18));
             }
-        }
-        return col;
-    }
-
-    /**
-     * The fill-texture probe. Four candidate paths, one swatch each: whichever blocks appear
-     * name the path the client actually resolves. Cheap, ugly, and deleted with the spike.
-     */
-    private GroupBuilder probeStrip(GroupBuilder col) {
-        col = (GroupBuilder) col.addChild(text("FlatProbeHead",
-                "FILL TEXTURE PROBE - WHICH BLOCKS ARE VISIBLE?",
-                theme.eyebrow(FlatTheme.INK_MUTED), 500, PAD, 600, 16));
-        int swW = (BODY_W - 30) / 4;
-        for (int i = 0; i < FlatTheme.FILL_CANDIDATES.length; i++) {
-            int x = PAD + (i * (swW + 10));
-            GroupBuilder swatch = (GroupBuilder) GroupBuilder.group()
-                    .withId("FlatProbe" + i)
-                    .withAnchor(new HyUIAnchor().setTop(526).setLeft(x)
-                            .setWidth(swW).setHeight(34))
-                    .withBackground(theme.fill(theme.accent(), FlatTheme.FILL_CANDIDATES[i]));
-            col = (GroupBuilder) col.addChild(swatch);
-            col = (GroupBuilder) col.addChild(text("FlatProbeT" + i,
-                    (char) ('A' + i) + "  " + FlatTheme.FILL_CANDIDATES[i],
-                    theme.body(FlatTheme.INK_SECONDARY), 566, x, swW, 60));
         }
         return col;
     }
