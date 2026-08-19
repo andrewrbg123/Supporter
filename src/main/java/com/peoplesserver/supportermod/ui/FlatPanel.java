@@ -11,7 +11,6 @@ import au.ellie.hyui.builders.SceneBlurBuilder;
 import au.ellie.hyui.builders.TextFieldBuilder;
 import au.ellie.hyui.builders.UIElementBuilder;
 import au.ellie.hyui.events.UIContext;
-import au.ellie.hyui.types.ScrollbarStyle;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
@@ -46,11 +45,10 @@ import java.util.function.BiConsumer;
  * mechanism every other interaction here uses, which is proven, rather than a layout mode that
  * is not. The cost is that a page holds every screen at once; the live panel already did that.
  *
- * <p><b>Every screen scrolls</b> (0.26.0). Each one is a {@code TopScrolling} group between the
- * header and the notice line, which retires the row ceilings this plugin has fought since the
- * first panel: a tab may now be as tall as its content. Probed before use, because HyUI ships
- * the mode but never uses it — the live answer was that absolute anchors survive it intact and
- * the wheel moves the viewport, which is the only combination that would have worked here.
+ * <p><b>Nothing scrolls.</b> {@code TopScrolling} exists as a layout mode and would retire the
+ * row ceilings this plugin keeps fighting, but it is unproven, and an unproven UI value costs a
+ * disconnect rather than a glitch. Every screen here is laid out to fit 788px instead. That is
+ * the next experiment, not this one.
  */
 public final class FlatPanel {
 
@@ -62,14 +60,8 @@ public final class FlatPanel {
     private static final int PAD = 40;
     private static final int CONTENT_W = WIDTH - RAIL_W;
     private static final int BODY_W = CONTENT_W - (PAD * 2);
-    /** The scrolling viewport: between the header rule (110) and the notice rule (726). */
-    private static final int VIEW_TOP = 126;
-    private static final int VIEW_H = 600;
-    /**
-     * First row of tab content, measured INSIDE the viewport rather than the content column —
-     * a scrolling group is the coordinate origin for everything it holds.
-     */
-    private static final int BODY_TOP = 18;
+    /** First row of tab content, below the header rule. */
+    private static final int BODY_TOP = 144;
 
     private static final int CHIP_H = 34;
     private static final int CHIP_ROW = 44;
@@ -277,20 +269,13 @@ public final class FlatPanel {
         return col;
     }
 
-    /**
-     * An empty screen: a scrolling viewport, visible only when its tab is selected.
-     *
-     * <p>The header and the notice line are deliberately OUTSIDE it — they are chrome, and
-     * chrome that scrolled away with the content would be worse than a row ceiling.
-     */
+    /** An empty screen container; only the first is visible. */
     private GroupBuilder screen(int index) {
-        GroupBuilder group = (GroupBuilder) GroupBuilder.group()
+        return (GroupBuilder) GroupBuilder.group()
                 .withId(tabId(index))
-                .withAnchor(new HyUIAnchor().setTop(VIEW_TOP).setLeft(0)
-                        .setWidth(CONTENT_W).setHeight(VIEW_H))
+                .withAnchor(new HyUIAnchor().setTop(0).setLeft(0)
+                        .setWidth(CONTENT_W).setHeight(HEIGHT))
                 .withVisible(index == 0);
-        group = group.withLayoutMode("TopScrolling");
-        return group.withScrollbarStyle(ScrollbarStyle.defaultStyle());
     }
 
     // --- 0: status ---------------------------------------------------------------------------
@@ -321,10 +306,8 @@ public final class FlatPanel {
                     theme.unit(), BODY_TOP + 72, x + 20, cardW - 40, 20));
         }
 
-        // Everything below is measured from the viewport, not the content column.
-        int collTop = BODY_TOP + 152;
         tab = (GroupBuilder) tab.addChild(text("FlatCollHead", "COLLECTION",
-                theme.eyebrow(FlatTheme.INK_MUTED), collTop, PAD, 240, 16));
+                theme.eyebrow(FlatTheme.INK_MUTED), 296, PAD, 240, 16));
 
         List<String> trails = new ArrayList<>();
         List<String> gear = new ArrayList<>();
@@ -360,23 +343,21 @@ public final class FlatPanel {
         for (int i = 0; i < 4; i++) {
             int x = PAD + (i * (collW + 14));
             List<String> items = collItems.get(i);
-            int cardTop = collTop + 34;
             tab = (GroupBuilder) tab.addChild(
-                    box("FlatColl" + i, FlatTheme.CARD_BG_SOFT, x, cardTop, collW, 140));
+                    box("FlatColl" + i, FlatTheme.CARD_BG_SOFT, x, 330, collW, 140));
             tab = (GroupBuilder) tab.addChild(
-                    hairlineBox("FlatCollEdge" + i, x, cardTop, collW, 140));
+                    hairlineBox("FlatCollEdge" + i, x, 330, collW, 140));
             tab = (GroupBuilder) tab.addChild(text("FlatCollLabel" + i, collLabels[i],
-                    theme.eyebrow(FlatTheme.INK_LABEL), cardTop + 18, x + 16, collW - 70, 16));
+                    theme.eyebrow(FlatTheme.INK_LABEL), 348, x + 16, collW - 70, 16));
             tab = (GroupBuilder) tab.addChild(text("FlatCollCount" + i,
                     String.valueOf(items.size()),
-                    right(theme.small(FlatTheme.INK_PRIMARY)), cardTop + 16, x + collW - 60,
-                    44, 18));
+                    right(theme.small(FlatTheme.INK_PRIMARY)), 346, x + collW - 60, 44, 18));
 
             // One column: two-up chips truncated "jack-sparrow" even at the smallest shrink.
             int chipW = collW - 32;
             int shown = items.size() > 3 ? 2 : Math.min(3, items.size());
             for (int j = 0; j < shown; j++) {
-                int cy = cardTop + 44 + (j * 28);
+                int cy = 374 + (j * 28);
                 tab = (GroupBuilder) tab.addChild(
                         box("FlatChip" + i + "_" + j, FlatTheme.CHIP_BG, x + 16, cy, chipW, 24));
                 tab = (GroupBuilder) tab.addChild(
@@ -386,7 +367,7 @@ public final class FlatPanel {
             if (items.size() > shown) {
                 tab = (GroupBuilder) tab.addChild(text("FlatChipMore" + i,
                         "+" + (items.size() - shown) + " more",
-                        theme.small(FlatTheme.INK_MUTED), cardTop + 104, x + 20, chipW, 18));
+                        theme.small(FlatTheme.INK_MUTED), 434, x + 20, chipW, 18));
             }
         }
         return tab;
