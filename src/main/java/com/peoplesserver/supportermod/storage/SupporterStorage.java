@@ -408,6 +408,145 @@ public final class SupporterStorage implements AutoCloseable {
         }
     }
 
+    // --- quests / token grants (0.21.0) -----------------------------------------------------
+
+    /** Tokens granted outside tenure — quest rewards. Part of the derived "earned" side. */
+    public synchronized int totalTokenGrants(UUID uuid) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "SELECT COALESCE(SUM(amount), 0) FROM supporter_token_grants"
+                                + " WHERE uuid = ?")) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    /**
+     * Records a token grant. Same idempotency shape as {@link #addUnlock}: the composite key
+     * refuses a second row, so a retried claim credits once.
+     *
+     * @return true if this call actually granted it
+     */
+    public synchronized boolean addTokenGrant(UUID uuid, String grantId, int amount, long atMs)
+            throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        """
+                        INSERT INTO supporter_token_grants(uuid, grant_id, amount, granted_at)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(uuid, grant_id) DO NOTHING
+                        """)) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, grantId);
+            ps.setInt(3, amount);
+            ps.setLong(4, atMs);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /** One player's progress on one quest. Null claimedAt means unclaimed. */
+    public record QuestRow(String questKey, int progress, int target, String marker,
+                           Long claimedAt) {}
+
+    public synchronized QuestRow questRow(UUID uuid, String questKey) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "SELECT progress, target, marker, claimed_at FROM supporter_quests"
+                                + " WHERE uuid = ? AND quest_key = ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, questKey);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                // wasNull() reports on the LAST column read, so it must be checked before any
+                // other getter runs — the first version checked it after reading three more
+                // columns and reported the marker's nullness instead of the claim's.
+                long claimed = rs.getLong(4);
+                boolean unclaimed = rs.wasNull();
+                return new QuestRow(questKey, rs.getInt(1), rs.getInt(2), rs.getString(3),
+                        unclaimed ? null : claimed);
+            }
+        }
+    }
+
+    /** Adds progress, capped at target in the UPSERT so no reader ever sees an overshoot. */
+    public synchronized void addQuestProgress(UUID uuid, String questKey, int amount, int target,
+                                              long atMs) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        """
+                        INSERT INTO supporter_quests(uuid, quest_key, progress, target, updated_at)
+                        VALUES (?, ?, MIN(?, ?), ?, ?)
+                        ON CONFLICT(uuid, quest_key) DO UPDATE SET
+                            progress = MIN(target, progress + ?),
+                            updated_at = ?
+                        """)) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, questKey);
+            ps.setInt(3, amount);
+            ps.setInt(4, target);
+            ps.setInt(5, target);
+            ps.setLong(6, atMs);
+            ps.setInt(7, amount);
+            ps.setLong(8, atMs);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Counts today once for a day-counting quest: progress moves only when {@code day} differs
+     * from the stored marker. Single-writer (the quest tick thread), so the read-modify-write
+     * inside the UPSERT is not racing anything.
+     */
+    public synchronized void markQuestDay(UUID uuid, String questKey, String day, int target,
+                                          long atMs) throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        """
+                        INSERT INTO supporter_quests(uuid, quest_key, progress, target, marker,
+                                                     updated_at)
+                        VALUES (?, ?, 1, ?, ?, ?)
+                        ON CONFLICT(uuid, quest_key) DO UPDATE SET
+                            progress = CASE WHEN marker IS ?
+                                THEN progress ELSE MIN(target, progress + 1) END,
+                            marker = ?,
+                            updated_at = ?
+                        """)) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, questKey);
+            ps.setInt(3, target);
+            ps.setString(4, day);
+            ps.setLong(5, atMs);
+            ps.setString(6, day);
+            ps.setString(7, day);
+            ps.setLong(8, atMs);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Marks a quest claimed — only if it is complete and not already claimed, guarded in the
+     * WHERE clause rather than by a check that could race.
+     *
+     * @return true if this call actually claimed it
+     */
+    public synchronized boolean claimQuest(UUID uuid, String questKey, long atMs)
+            throws SQLException {
+        try (PreparedStatement ps =
+                conn().prepareStatement(
+                        "UPDATE supporter_quests SET claimed_at = ? WHERE uuid = ?"
+                                + " AND quest_key = ? AND claimed_at IS NULL"
+                                + " AND progress >= target")) {
+            ps.setLong(1, atMs);
+            ps.setString(2, uuid.toString());
+            ps.setString(3, questKey);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
     // --- transactions ---------------------------------------------------------------------
 
     /** Body of a transaction. */

@@ -140,6 +140,43 @@ final class Migrations {
                 // identity column: it outlives a lapse (stops applying, is not deleted), and
                 // a name no longer in the catalogue is ignored rather than an error.
                 "ALTER TABLE supporter_identity ADD COLUMN skin TEXT"
+            },
+            // --- V6: v0.21.0 quests -------------------------------------------------------
+            new String[] {
+                """
+                -- Tokens earned OUTSIDE tenure — quest rewards today, anything else later.
+                --
+                -- This extends the derived-balance rule rather than breaking it: earned is now
+                -- tenure PLUS the sum of this ledger, and the balance still has no stored
+                -- counter anywhere. The composite PRIMARY KEY makes every grant idempotent the
+                -- same way purchases are: a grant id can land once, so a double-claim or a
+                -- crash-retry cannot credit twice. Rows are never deleted — a chargeback
+                -- removes tenure, not quest earnings, because these were earned by playing.
+                CREATE TABLE supporter_token_grants (
+                    uuid       TEXT    NOT NULL,
+                    grant_id   TEXT    NOT NULL,
+                    amount     INTEGER NOT NULL,
+                    granted_at INTEGER NOT NULL,
+                    PRIMARY KEY (uuid, grant_id)
+                )
+                """,
+                """
+                -- Per-player quest progress, keyed by a date-scoped quest key
+                -- ("d:2026-08-19:play30", "w:2026-W34:wdays4"), so a new day or week simply
+                -- starts writing new rows and old ones become inert history. progress is
+                -- capped at target in the UPSERT; marker is the last UTC date counted, used
+                -- by day-counting quests to count each day once.
+                CREATE TABLE supporter_quests (
+                    uuid       TEXT    NOT NULL,
+                    quest_key  TEXT    NOT NULL,
+                    progress   INTEGER NOT NULL DEFAULT 0,
+                    target     INTEGER NOT NULL,
+                    marker     TEXT,
+                    claimed_at INTEGER,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY (uuid, quest_key)
+                )
+                """
             });
 
     static void apply(Connection conn) throws SQLException {

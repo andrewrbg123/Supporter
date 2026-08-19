@@ -135,6 +135,18 @@ public final class SupporterConfig {
     private int tokensPerMonth = 100;
 
     /**
+     * Quest rewards (0.21.0), in tokens: three dailies and one weekly are live at once.
+     *
+     * <p><b>These numbers change what tokens are.</b> At the defaults, fully-cleared quests
+     * pay 150/day + 100/week — roughly 46x the tenure rate — turning the shop from a loyalty
+     * ladder into an engagement engine. That is a deliberate choice, and retuning it is one
+     * edit here, no rebuild. Setting either to 0 stops advertising a reward but quests still
+     * track; the balance stays derived either way.
+     */
+    private int questDailyReward = 50;
+    private int questWeeklyReward = 100;
+
+    /**
      * Trail id → cost in tokens. Absent or 0 means free to every supporter.
      *
      * <p>Prices are configuration so the ladder can be retuned without a rebuild and without
@@ -562,6 +574,14 @@ public final class SupporterConfig {
             gearCosts = new LinkedHashMap<>(gearCosts);
         }
         defaultGearCosts().forEach(gearCosts::putIfAbsent);
+    }
+
+    public int questDailyReward() {
+        return Math.max(0, questDailyReward);
+    }
+
+    public int questWeeklyReward() {
+        return Math.max(0, questWeeklyReward);
     }
 
     /** Cost of a wearable in tokens. Anything not listed is free. */

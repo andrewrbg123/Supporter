@@ -75,9 +75,9 @@ public final class SupporterPanel {
     private static final int ROW_HEIGHT = 38;
 
     /** Tab hit area. Text-only tabs were too small a target on the first live build. */
-    private static final int TAB_WIDTH = 120; // seven tabs across the bar since the Wardrobe tab
+    private static final int TAB_WIDTH = 106; // eight tabs across the bar since the Quests tab
     private static final int TAB_HEIGHT = 42;
-    private static final int TAB_SPACING = 10;
+    private static final int TAB_SPACING = 8; // 8 x 106 + 7 x 8 = 904, inside the 912 content
 
     /** Buy button, sized to sit on the right of a shop row. */
     private static final int BUY_WIDTH = 120;
@@ -134,6 +134,7 @@ public final class SupporterPanel {
             root = (GroupBuilder) root.addChild(statusTab(service, uuid));
             root = (GroupBuilder) root.addChild(perksTab(service, uuid));
             root = (GroupBuilder) root.addChild(shopTab(service, uuid, world));
+            root = (GroupBuilder) root.addChild(questsTab(service, uuid, world));
             root = (GroupBuilder) root.addChild(trailsTab(service, uuid, world));
             root = (GroupBuilder) root.addChild(chatTab(service, uuid, world));
             root = (GroupBuilder) root.addChild(wardrobeTab(service, uuid, playerRef, world));
@@ -192,6 +193,7 @@ public final class SupporterPanel {
                 .addTab("status", "Status", tabButton("status"))
                 .addTab("perks", "Perks", tabButton("perks"))
                 .addTab("shop", "Shop", tabButton("shop"))
+                .addTab("quests", "Quests", tabButton("quests"))
                 .addTab("trails", "Trails", tabButton("trails"))
                 .addTab("chat", "Chat", tabButton("chat"))
                 .addTab("wardrobe", "Wardrobe", tabButton("wardrobe"))
@@ -326,6 +328,9 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("PkHomes",
                 "Homes: " + config.supporterHomeSlots()
                         + " instead of " + config.defaultHomeSlots(), theme.body(), row++));
+        tab = (TabContentBuilder) tab.addChild(line("PkQuests",
+                "Daily and weekly quests that pay tokens - the Quests tab",
+                theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkTokens",
                 config.tokensPerMonth() + " tokens a month, spent in the shop",
                 theme.body(), row));
@@ -436,6 +441,130 @@ public final class SupporterPanel {
             skinIndex++;
         }
         return tab;
+    }
+
+    // --- quests tab -----------------------------------------------------------------------
+
+    /**
+     * Three dailies and a weekly, with a Claim button that appears when a quest completes.
+     *
+     * <p>Progress rows are snapshots like everything else here — the panel does not live-tick.
+     * Reopening (or claiming anything) refreshes them. A panel that outlives midnight UTC
+     * offers yesterday's quests; claiming one then reports it expired rather than paying out,
+     * which is the honest answer.
+     */
+    private UIElementBuilder<?> questsTab(SupporterService service, UUID uuid, World world) {
+        SupporterConfig config = plugin.config();
+        TabContentBuilder tab = content("quests");
+        int row = 0;
+
+        if (!service.isSupporter(uuid)) {
+            tab = (TabContentBuilder) tab.addChild(line("QstLocked",
+                    "Quests are a supporter perk. The About tab explains how to become one.",
+                    theme.dim(), row));
+            return tab;
+        }
+
+        List<SupporterService.QuestState> quests = service.quests(uuid);
+        tab = (TabContentBuilder) tab.addChild(line("QstDailyHead",
+                "Daily quests — " + config.questDailyReward()
+                        + " tokens each, reset at midnight UTC",
+                theme.heading(), row++));
+        for (SupporterService.QuestState q : quests) {
+            if (!q.daily()) {
+                continue;
+            }
+            tab = addQuestRow(tab, service, uuid, q, world, row++);
+        }
+        row++;
+        tab = (TabContentBuilder) tab.addChild(line("QstWeeklyHead",
+                "Weekly quest — " + config.questWeeklyReward() + " tokens",
+                theme.heading(), row++));
+        for (SupporterService.QuestState q : quests) {
+            if (q.daily()) {
+                continue;
+            }
+            tab = addQuestRow(tab, service, uuid, q, world, row++);
+        }
+        row++;
+        tab = (TabContentBuilder) tab.addChild(line("QstNote",
+                "Progress counts while you play - it ticks about once a minute. "
+                        + "Claim before the reset; unclaimed quests expire.",
+                theme.dim(), row));
+        return tab;
+    }
+
+    private TabContentBuilder addQuestRow(TabContentBuilder tab, SupporterService service,
+                                          UUID uuid, SupporterService.QuestState q, World world,
+                                          int row) {
+        tab = (TabContentBuilder) tab.addChild(line(questRowId(q.key()),
+                questRowText(q), questRowStyle(q), row));
+        tab = (TabContentBuilder) tab.addChild(
+                smallButton(questClaimId(q.key()), "Claim",
+                        WIDTH - (PAD * 2) - BUY_WIDTH, row * ROW_HEIGHT - 4,
+                        (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                                claimQuestClick(service, uuid, q.key(), world, ctx))
+                        .withVisible(q.claimable()));
+        return tab;
+    }
+
+    /** Quest keys contain ':' — keep element ids to the character set every other id uses. */
+    private static String questRowId(String key) {
+        return "QstRow_" + key.replace(':', '_');
+    }
+
+    private static String questClaimId(String key) {
+        return "QstClaim_" + key.replace(':', '_');
+    }
+
+    private String questRowText(SupporterService.QuestState q) {
+        String state = q.claimed() ? "  (claimed)" : q.complete() ? "  (ready to claim!)" : "";
+        return q.label() + " - " + q.progress() + "/" + q.target() + state;
+    }
+
+    private HyUIStyle questRowStyle(SupporterService.QuestState q) {
+        if (q.claimable()) {
+            return theme.coloured(SupporterTheme.INK_GOOD, true);
+        }
+        return q.claimed() ? theme.coloured(SupporterTheme.INK_GOOD, false) : theme.body();
+    }
+
+    private void claimQuestClick(SupporterService service, UUID uuid, String key, World world,
+                                 au.ellie.hyui.events.UIContext ctx) {
+        String note;
+        try {
+            note = switch (service.claimQuest(uuid, key)) {
+                case CLAIMED -> "Quest complete — tokens added to your balance!";
+                case NOT_DONE -> "Not finished yet — keep going.";
+                case ALREADY_CLAIMED -> "Already claimed.";
+                case NOT_SUPPORTER -> "Quests are a supporter perk — see the About tab.";
+                case UNKNOWN_QUEST ->
+                        "That quest expired at the reset — reopen the panel for today's.";
+            };
+        } catch (RuntimeException e) {
+            plugin.log().error("Quest claim failed for " + uuid + " (" + key + ")", e);
+            note = "Claim failed — try again in a moment.";
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                refreshQuests(service, uuid, ctx);
+                refreshAfterPurchase(service, uuid, ctx, message);
+            } catch (Throwable t) {
+                plugin.log().warn("Quest claim refresh failed: " + t);
+            }
+        });
+    }
+
+    /** Rewrites every quest row and claim button. Edits only — the caller runs updatePage. */
+    private void refreshQuests(SupporterService service, UUID uuid,
+                               au.ellie.hyui.events.UIContext ctx) {
+        for (SupporterService.QuestState q : service.quests(uuid)) {
+            ctx.editById(questRowId(q.key()), LabelBuilder.class,
+                    label -> label.withText(questRowText(q)).withStyle(questRowStyle(q)));
+            ctx.editById(questClaimId(q.key()), CustomButtonBuilder.class,
+                    button -> button.withVisible(q.claimable()));
+        }
     }
 
     /**

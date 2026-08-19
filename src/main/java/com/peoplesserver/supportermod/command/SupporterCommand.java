@@ -78,6 +78,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
+        addSubCommand(new QuestsSub(plugin));
         addSubCommand(new ChargebackSub(plugin));
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
@@ -556,6 +557,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "  Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "  Tokens: " + config.tokensPerMonth() + " per month of support");
+            info(ctx, "  Quests: 3 dailies at " + config.questDailyReward()
+                    + " tokens, a weekly at " + config.questWeeklyReward()
+                    + " — /supporter quests");
 
             if (active) {
                 info(ctx, "");
@@ -623,7 +627,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "    " + config.tokensPerMonth()
-                    + " tokens a month, spent on trails in /supporter shop");
+                    + " tokens a month, plus daily and weekly quests that pay more");
             info(ctx, "");
 
             if (config.hasStorefront()) {
@@ -1224,6 +1228,104 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             } catch (RuntimeException e) {
                 err(ctx, "Purchase failed: " + e.getMessage());
                 plugin.log().error("purchase failed for " + uuid, e);
+            }
+        }
+    }
+
+    // --- /supporter quests --------------------------------------------------------------------
+
+    /**
+     * The chat fallback for the Quests tab: list with numbers, claim by number. The panel is
+     * the intended surface, but every panel feature keeps a chat path — HyUI is optional.
+     */
+    public static final class QuestsSub extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public QuestsSub(SupporterPlugin plugin) {
+            super("quests", "Your daily and weekly quests: list, and claim <number>.");
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"quest"});
+            this.plugin = plugin;
+            addUsageVariant(new QuestClaimVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            UUID uuid = player.getUuid();
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "Quests are a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            ok(ctx, "Quests - dailies pay " + plugin.config().questDailyReward()
+                    + " tokens, the weekly pays " + plugin.config().questWeeklyReward()
+                    + ". Reset is midnight UTC.");
+            int n = 1;
+            for (SupporterService.QuestState q : service.quests(uuid)) {
+                String state = q.claimed() ? " (claimed)"
+                        : q.complete() ? " (READY - /supporter quests " + n + ")"
+                        : "";
+                info(ctx, "  " + n + ". " + (q.daily() ? "" : "[weekly] ") + q.label()
+                        + " - " + q.progress() + "/" + q.target() + state);
+                n++;
+            }
+        }
+    }
+
+    /** The {@code /supporter quests <number>} form — claims that quest. */
+    public static final class QuestClaimVariant extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument numberArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public QuestClaimVariant(SupporterPlugin plugin) {
+            super("Claim a completed quest by its number from the list.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.numberArg = withRequiredArg("number", "quest number from the list",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            UUID uuid = player.getUuid();
+            List<SupporterService.QuestState> quests = service.quests(uuid);
+            int number;
+            try {
+                number = Integer.parseInt(String.valueOf(ctx.get(numberArg)).trim());
+            } catch (NumberFormatException e) {
+                err(ctx, "Give the quest's number - /supporter quests to see the list.");
+                return;
+            }
+            if (number < 1 || number > quests.size()) {
+                err(ctx, "No quest " + number + " - /supporter quests to see the list.");
+                return;
+            }
+            SupporterService.QuestState q = quests.get(number - 1);
+            try {
+                switch (service.claimQuest(uuid, q.key())) {
+                    case CLAIMED -> ok(ctx, "Quest complete: " + q.label() + " - +"
+                            + q.reward() + " tokens. Balance: " + service.tokenBalance(uuid));
+                    case NOT_DONE -> info(ctx, q.label() + " - " + q.progress() + "/"
+                            + q.target() + ". Not finished yet.");
+                    case ALREADY_CLAIMED -> info(ctx, "Already claimed.");
+                    case NOT_SUPPORTER -> err(ctx,
+                            "Quests are a supporter perk. /supporter info to find out more.");
+                    case UNKNOWN_QUEST -> err(ctx,
+                            "That quest expired at the reset - /supporter quests for today's.");
+                }
+            } catch (RuntimeException e) {
+                err(ctx, "Claim failed: " + e.getMessage());
+                plugin.log().error("Quest claim failed for " + uuid, e);
             }
         }
     }

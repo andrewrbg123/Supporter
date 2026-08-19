@@ -24,6 +24,7 @@ import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
 import com.peoplesserver.supportermod.platform.hytale.LuckPermsSync;
 import com.peoplesserver.supportermod.platform.hytale.ReservedSlots;
+import com.peoplesserver.supportermod.platform.hytale.QuestTracker;
 import com.peoplesserver.supportermod.platform.hytale.SupporterChatTag;
 import com.peoplesserver.supportermod.platform.hytale.TrailSystem;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
@@ -64,6 +65,7 @@ public final class SupporterPlugin extends JavaPlugin {
     private ExecutorScheduler scheduler;
     private Scheduler.Task reconcileTask;
     private Scheduler.Task trailTask;
+    private Scheduler.Task questTask;
 
     /** Non-null when setup failed; reported by every command so it cannot go unnoticed. */
     private volatile String startupError;
@@ -203,6 +205,13 @@ public final class SupporterPlugin extends JavaPlugin {
             long trailMs = Math.max(50L, config.trailIntervalTicks() * 50L);
             this.trailTask = scheduler.scheduleRepeating(trails::tick, trailMs, trailMs);
 
+            // 0.21.0: quests. EXACTLY 60s — each firing credits one minute of playtime, so
+            // the interval is the unit, not a tuning knob. See QuestTracker.
+            QuestTracker questTracker = new QuestTracker(service, scheduler, log);
+            this.questTask = scheduler.scheduleRepeating(questTracker::tick, 60_000L, 60_000L);
+            getEventRegistry().registerGlobal(
+                    PlayerChatEvent.class, questTracker::onPlayerChat);
+
             log.info("Ready — grace " + config.graceDays() + "d, reconcile at "
                     + config.reconcileHourUtc() + ":00 UTC, trails every " + trailMs + "ms "
                     + "(cap " + config.maxConcurrentTrails() + "/tick, "
@@ -227,6 +236,14 @@ public final class SupporterPlugin extends JavaPlugin {
     }
 
     private void closeQuietly() {
+        if (questTask != null) {
+            try {
+                questTask.cancel();
+            } catch (Throwable ignored) {
+                // shutting down anyway
+            }
+            questTask = null;
+        }
         if (trailTask != null) {
             try {
                 trailTask.cancel();

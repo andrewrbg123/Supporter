@@ -162,6 +162,22 @@ class SupporterConfigTest {
     }
 
     @Test
+    @DisplayName("quest rewards default to 50 daily / 100 weekly and never go negative")
+    void questRewardDefaults(@TempDir Path dir) throws IOException {
+        SupporterConfig config = SupporterConfig.defaults();
+        config.validate();
+        assertEquals(50, config.questDailyReward());
+        assertEquals(100, config.questWeeklyReward());
+
+        // An admin setting a negative reward gets 0, not a token sink.
+        Path file = dir.resolve("supporter.json");
+        Files.writeString(file, """
+                {"questDailyReward": -5}
+                """, StandardCharsets.UTF_8);
+        assertEquals(0, SupporterConfig.load(file).questDailyReward());
+    }
+
+    @Test
     @DisplayName("every priced gear name is a real catalogue entry in the command source")
     void gearPricesMatchTheCatalogue() throws IOException {
         // The catalogues live in SupporterCommand (which needs the server jar, absent from the

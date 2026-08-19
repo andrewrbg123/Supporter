@@ -8,6 +8,8 @@ import com.peoplesserver.supportermod.platform.PluginLog;
 import com.peoplesserver.supportermod.storage.SupporterStorage;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -460,8 +462,21 @@ public final class SupporterService {
      * number the entitlement path already maintains carefully, and recomputing it always gives
      * the same answer. Same argument as {@code total_months} itself.
      */
+    /**
+     * Tenure earnings plus the token-grant ledger (quest rewards).
+     *
+     * <p>Still fully derived — no stored counter anywhere. The 0.21.0 change is that "earned"
+     * is now the sum of two append-only ledgers instead of one formula: months of tenure, and
+     * idempotent grant rows. Both refuse double-credit at the database.
+     */
     public int tokensEarned(UUID uuid) {
-        return get(uuid).map(r -> r.totalMonths() * config.tokensPerMonth()).orElse(0);
+        int fromTenure =
+                get(uuid).map(r -> r.totalMonths() * config.tokensPerMonth()).orElse(0);
+        try {
+            return fromTenure + storage.totalTokenGrants(uuid);
+        } catch (SQLException e) {
+            throw new StorageException("Failed to read token grants for " + uuid, e);
+        }
     }
 
     public int tokensSpent(UUID uuid) {
@@ -588,6 +603,149 @@ public final class SupporterService {
             });
         } catch (SQLException e) {
             throw new StorageException("Failed to purchase gear " + gearName, e);
+        }
+    }
+
+    // --- quests (0.21.0) --------------------------------------------------------------------
+
+    /** One live quest, with this player's progress. Daily quests reset at midnight UTC. */
+    public record QuestState(String key, String label, int target, int progress,
+                             boolean claimed, int reward, boolean daily) {
+        public boolean complete() {
+            return progress >= target;
+        }
+
+        public boolean claimable() {
+            return complete() && !claimed;
+        }
+    }
+
+    public enum QuestClaimResult { CLAIMED, NOT_DONE, ALREADY_CLAIMED, NOT_SUPPORTER,
+        UNKNOWN_QUEST }
+
+    /** Today, on the same UTC clock the reconcile job and the quest keys use. */
+    private LocalDate questDate() {
+        return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    /** The live roster — three dailies and the weekly — with this player's progress on each. */
+    public List<QuestState> quests(UUID uuid) {
+        LocalDate today = questDate();
+        List<QuestState> out = new ArrayList<>(Quests.DAILY_COUNT + 1);
+        try {
+            for (Quests.Def def : Quests.dailyRoster(today)) {
+                out.add(state(uuid, Quests.dailyKey(today, def), def,
+                        config.questDailyReward(), true));
+            }
+            Quests.Def weekly = Quests.weeklyQuest(today);
+            out.add(state(uuid, Quests.weeklyKey(today, weekly), weekly,
+                    config.questWeeklyReward(), false));
+        } catch (SQLException e) {
+            throw new StorageException("Failed to read quest progress for " + uuid, e);
+        }
+        return out;
+    }
+
+    private QuestState state(UUID uuid, String key, Quests.Def def, int reward, boolean daily)
+            throws SQLException {
+        SupporterStorage.QuestRow row = storage.questRow(uuid, key);
+        int progress = row == null ? 0 : Math.min(row.progress(), def.target());
+        boolean claimed = row != null && row.claimedAt() != null;
+        return new QuestState(key, def.label(), def.target(), progress, claimed, reward, daily);
+    }
+
+    /**
+     * Adds progress to every live quest counting {@code unit}. Called from the quest tick
+     * (minutes, blocks) and the chat handler (messages) — {@code DAYS} quests go through
+     * {@link #markQuestDay} instead, because a day must be counted once, not accumulated.
+     *
+     * <p>Supporters only: quests are the token engine and tokens are the supporter currency.
+     * Progress for a lapsed player is simply not recorded — same as trails not emitting.
+     */
+    public void recordQuestProgress(UUID uuid, Quests.Unit unit, int amount) {
+        if (uuid == null || amount <= 0 || unit == Quests.Unit.DAYS || !isSupporter(uuid)) {
+            return;
+        }
+        LocalDate today = questDate();
+        long now = clock.millis();
+        try {
+            for (Quests.Def def : Quests.dailyRoster(today)) {
+                if (def.unit() == unit) {
+                    storage.addQuestProgress(uuid, Quests.dailyKey(today, def), amount,
+                            def.target(), now);
+                }
+            }
+            Quests.Def weekly = Quests.weeklyQuest(today);
+            if (weekly.unit() == unit) {
+                storage.addQuestProgress(uuid, Quests.weeklyKey(today, weekly), amount,
+                        weekly.target(), now);
+            }
+        } catch (SQLException e) {
+            throw new StorageException("Failed to record quest progress for " + uuid, e);
+        }
+    }
+
+    /** Counts today once for every live day-counting quest (login daily, days-this-week). */
+    public void markQuestDay(UUID uuid) {
+        if (uuid == null || !isSupporter(uuid)) {
+            return;
+        }
+        LocalDate today = questDate();
+        String day = Quests.dayKey(today);
+        long now = clock.millis();
+        try {
+            for (Quests.Def def : Quests.dailyRoster(today)) {
+                if (def.unit() == Quests.Unit.DAYS) {
+                    storage.markQuestDay(uuid, Quests.dailyKey(today, def), day,
+                            def.target(), now);
+                }
+            }
+            Quests.Def weekly = Quests.weeklyQuest(today);
+            if (weekly.unit() == Quests.Unit.DAYS) {
+                storage.markQuestDay(uuid, Quests.weeklyKey(today, weekly), day,
+                        weekly.target(), now);
+            }
+        } catch (SQLException e) {
+            throw new StorageException("Failed to mark quest day for " + uuid, e);
+        }
+    }
+
+    /**
+     * Claims a completed quest: marks it claimed and writes the token grant, in one
+     * transaction. Both halves are idempotent on their own — the claim UPDATE is guarded in
+     * its WHERE clause and the grant has a composite primary key — so a double-click, a race
+     * or a crash-retry can never credit twice.
+     */
+    public synchronized QuestClaimResult claimQuest(UUID uuid, String questKey) {
+        Objects.requireNonNull(uuid, "uuid");
+        if (!isSupporter(uuid)) {
+            return QuestClaimResult.NOT_SUPPORTER;
+        }
+        QuestState state = quests(uuid).stream()
+                .filter(q -> q.key().equals(questKey))
+                .findFirst()
+                .orElse(null);
+        if (state == null) {
+            // A panel opened yesterday offering yesterday's quests. They expired unclaimed —
+            // claims are part of the day they belong to.
+            return QuestClaimResult.UNKNOWN_QUEST;
+        }
+        try {
+            return storage.transact(() -> {
+                long now = clock.millis();
+                if (!storage.claimQuest(uuid, questKey, now)) {
+                    return state.claimed()
+                            ? QuestClaimResult.ALREADY_CLAIMED
+                            : QuestClaimResult.NOT_DONE;
+                }
+                storage.addTokenGrant(uuid, "quest:" + questKey, state.reward(), now);
+                storage.log(uuid, directory.usernameFor(uuid).orElse(null),
+                        "QUEST", questKey + " claimed for " + state.reward() + " tokens",
+                        "player", now);
+                return QuestClaimResult.CLAIMED;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Failed to claim quest " + questKey, e);
         }
     }
 
