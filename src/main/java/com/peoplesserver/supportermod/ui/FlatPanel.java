@@ -118,11 +118,14 @@ public final class FlatPanel {
                 active ? service.daysRemaining(uuid) + " DAYS LEFT" : "NOT A SUPPORTER",
                 theme.small(FlatTheme.INK_SECONDARY), 60, 112, 120, 16));
 
-        // Tenure meter: remaining against the longest tier we sell, clamped — a bar that can
-        // overflow its track is worse than no bar.
+        // Tenure meter: how much of everything you have ever bought is still ahead of you.
+        // The first build measured remaining against max(90, remaining), which is always 1 for
+        // anyone past 90 days — a bar pinned at full says nothing. Against lifetime total it
+        // reads honestly: renewing pushes it back up, letting it run down empties it.
         int remaining = (int) Math.max(0L, service.daysRemaining(uuid));
-        int span = Math.max(90, remaining);
-        int fillW = Math.max(2, Math.round(192f * remaining / span));
+        int lifetime = Math.max(remaining, service.get(uuid).map(r -> r.totalDays()).orElse(0));
+        int fillW = lifetime <= 0 ? 0
+                : Math.max(2, Math.round(192f * remaining / lifetime));
         rail = (GroupBuilder) rail.addChild(
                 box("FlatMeterTrack", FlatTheme.METER_TRACK, 22, 94, 192, 4));
         if (remaining > 0) {
@@ -250,30 +253,33 @@ public final class FlatPanel {
             int x = PAD + (i * (collW + 14));
             List<String> items = collItems.get(i);
             col = (GroupBuilder) col.addChild(
-                    box("FlatColl" + i, FlatTheme.CARD_BG_SOFT, x, 330, collW, 132));
+                    box("FlatColl" + i, FlatTheme.CARD_BG_SOFT, x, 330, collW, 140));
             col = (GroupBuilder) col.addChild(
-                    hairlineBox("FlatCollEdge" + i, x, 330, collW, 132));
+                    hairlineBox("FlatCollEdge" + i, x, 330, collW, 140));
             col = (GroupBuilder) col.addChild(text("FlatCollLabel" + i, collLabels[i],
                     theme.eyebrow(FlatTheme.INK_LABEL), 348, x + 16, collW - 70, 16));
             col = (GroupBuilder) col.addChild(text("FlatCollCount" + i,
                     String.valueOf(items.size()),
                     right(theme.small(FlatTheme.INK_PRIMARY)), 346, x + collW - 60, 44, 18));
 
-            // Four chips at most: the card is a summary, not a manifest.
-            int chipW = (collW - 38) / 2;
-            for (int j = 0; j < Math.min(4, items.size()); j++) {
-                int cx = x + 16 + ((j % 2) * (chipW + 6));
-                int cy = 376 + ((j / 2) * 28);
+            // ONE COLUMN, not two: the first build's two-up chips were 83px wide and truncated
+            // "jack-sparrow" to "jack-sparro..." even after shrink-to-fit bottomed out. Names
+            // in this plugin run to twelve characters, so the card gives each chip its full
+            // width. Three at most — this is a summary, not a manifest.
+            int chipW = collW - 32;
+            int shown = items.size() > 3 ? 2 : Math.min(3, items.size());
+            for (int j = 0; j < shown; j++) {
+                int cy = 374 + (j * 28);
                 col = (GroupBuilder) col.addChild(
-                        box("FlatChip" + i + "_" + j, FlatTheme.CHIP_BG, cx, cy, chipW, 24));
+                        box("FlatChip" + i + "_" + j, FlatTheme.CHIP_BG, x + 16, cy, chipW, 24));
                 col = (GroupBuilder) col.addChild(
                         text("FlatChipT" + i + "_" + j, items.get(j), theme.chip(),
-                                cy + 4, cx + 4, chipW - 8, 18));
+                                cy + 4, x + 20, chipW - 8, 18));
             }
-            if (items.size() > 4) {
+            if (items.size() > shown) {
                 col = (GroupBuilder) col.addChild(text("FlatChipMore" + i,
-                        "+" + (items.size() - 4) + " more",
-                        theme.small(FlatTheme.INK_MUTED), 434, x + 16, collW - 32, 18));
+                        "+" + (items.size() - shown) + " more",
+                        theme.small(FlatTheme.INK_MUTED), 434, x + 20, chipW, 18));
             }
         }
         return col;
