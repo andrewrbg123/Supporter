@@ -24,6 +24,7 @@ import com.peoplesserver.supportermod.platform.hytale.HytaleMessenger;
 import com.peoplesserver.supportermod.platform.hytale.HytalePlayerDirectory;
 import com.peoplesserver.supportermod.platform.hytale.LuckPermsSync;
 import com.peoplesserver.supportermod.platform.hytale.ReservedSlots;
+import com.peoplesserver.supportermod.platform.hytale.PetSystem;
 import com.peoplesserver.supportermod.platform.hytale.QuestTracker;
 import com.peoplesserver.supportermod.platform.hytale.SupporterChatTag;
 import com.peoplesserver.supportermod.platform.hytale.TrailSystem;
@@ -67,6 +68,8 @@ public final class SupporterPlugin extends JavaPlugin {
     private Scheduler.Task trailTask;
     private Scheduler.Task questTask;
     private Scheduler.Task questSampleTask;
+    private Scheduler.Task petTask;
+    private com.peoplesserver.supportermod.platform.hytale.PetSystem petSystem;
 
     /** Non-null when setup failed; reported by every command so it cannot go unnoticed. */
     private volatile String startupError;
@@ -206,6 +209,11 @@ public final class SupporterPlugin extends JavaPlugin {
             long trailMs = Math.max(50L, config.trailIntervalTicks() * 50L);
             this.trailTask = scheduler.scheduleRepeating(trails::tick, trailMs, trailMs);
 
+            // 0.21.5 SPIKE: pets. One-second follow tick; the system is idle while nobody
+            // has a pet out. Promoted to a real perk only if the live test passes.
+            this.petSystem = new PetSystem(log);
+            this.petTask = scheduler.scheduleRepeating(petSystem::tick, 1_000L, 1_000L);
+
             // 0.21.0: quests. The minute tick is EXACTLY 60s — each firing credits one minute
             // of playtime, so the interval is the unit, not a tuning knob. The 10s sampler
             // (0.21.1) only accumulates travel in memory; see QuestTracker.
@@ -240,7 +248,31 @@ public final class SupporterPlugin extends JavaPlugin {
         }
     }
 
+    /** The pet system, or null before setup finished. */
+    public com.peoplesserver.supportermod.platform.hytale.PetSystem pets() {
+        return petSystem;
+    }
+
     private void closeQuietly() {
+        // Pets first, and synchronously: cancel the tick, then remove the live NPCs directly.
+        // A world.execute here would silently never run (the world thread is winding down),
+        // which is exactly how FactionMod leaked NPCs on every restart.
+        if (petTask != null) {
+            try {
+                petTask.cancel();
+            } catch (Throwable ignored) {
+                // shutting down anyway
+            }
+            petTask = null;
+        }
+        if (petSystem != null) {
+            try {
+                petSystem.removeAllSync();
+            } catch (Throwable ignored) {
+                // shutting down anyway
+            }
+            petSystem = null;
+        }
         if (questSampleTask != null) {
             try {
                 questSampleTask.cancel();

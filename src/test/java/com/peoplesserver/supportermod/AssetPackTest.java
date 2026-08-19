@@ -116,6 +116,42 @@ class AssetPackTest {
         }
     }
 
+    @Test
+    @DisplayName("NPC role JSONs are byte-clean — no BOM, no raw control character in a string")
+    void npcRolesAreByteClean() throws IOException {
+        // Role JSONs are parsed by the server's strict reader, same as the manifest — and the
+        // manifest lesson stands: lenient workstation parsers pass what stops the boot. Fox
+        // and Penguin were generated through PowerShell, whose utf8 encoding adds a BOM by
+        // default; that exact defect is what this scans for.
+        Path roles = Path.of("src", "main", "resources", "Server", "NPC", "Roles");
+        if (!Files.isDirectory(roles)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(roles)) {
+            for (Path p : walk.filter(Files::isRegularFile).toList()) {
+                byte[] bytes = Files.readAllBytes(p);
+                assertTrue(bytes.length > 0, p + " is empty");
+                assertTrue((bytes[0] & 0xFF) == '{',
+                        p + " must start with '{' — a BOM or stray bytes stop the boot");
+                // Naive quote toggle: our role files contain no escaped quotes, asserted here
+                // so the scan stays valid.
+                boolean inString = false;
+                for (byte b : bytes) {
+                    int c = b & 0xFF;
+                    if (c == '\\') {
+                        fail(p + " contains a backslash — escaped strings break this scan; "
+                                + "extend it before shipping one");
+                    }
+                    if (c == '"') {
+                        inString = !inString;
+                    } else if (inString && c < 0x20) {
+                        fail(p + " has a raw control character inside a JSON string");
+                    }
+                }
+            }
+        }
+    }
+
     private static List<Path> itemFiles() throws IOException {
         if (!Files.isDirectory(ITEMS)) {
             return List.of();

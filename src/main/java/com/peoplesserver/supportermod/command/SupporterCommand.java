@@ -79,6 +79,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
         addSubCommand(new QuestsSub(plugin));
+        addSubCommand(new PettestSub(plugin));
         addSubCommand(new ChargebackSub(plugin));
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
@@ -1095,6 +1096,80 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 err(ctx, "Could not deliver: " + t.getMessage());
                 plugin.log().error("Shoe delivery failed for " + player.getUuid(), t);
             }
+        }
+    }
+
+    // --- /supporter pettest (SPIKE) -----------------------------------------------------------
+
+    /**
+     * Admin-only spike, the capetest of pets: spawns a cosmetic follower NPC and answers the
+     * questions only a live look can — does a creature rig animate on a Generic role, does the
+     * A* follow keep up, does the pet interfere with anything. Delete or promote once
+     * answered.
+     */
+    public static final class PettestSub extends AbstractPlayerCommand {
+
+        /** Pet name → role file stem in our asset pack's Server/NPC/Roles/. */
+        public static final java.util.Map<String, String> PETS = new java.util.LinkedHashMap<>();
+
+        static {
+            PETS.put("bunny", "SupporterPet_Bunny");
+            PETS.put("fox", "SupporterPet_Fox");
+            PETS.put("penguin", "SupporterPet_Penguin");
+        }
+
+        private final SupporterPlugin plugin;
+        private final Argument petArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public PettestSub(SupporterPlugin plugin) {
+            super("pettest", "SPIKE: spawn a follower pet - <"
+                    + String.join("|", PETS.keySet()) + "|off>");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+            this.petArg = withRequiredArg("pet", "pet name, or off",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            var pets = plugin.pets();
+            if (pets == null) {
+                err(ctx, "Pet system unavailable — the plugin failed to start.");
+                return;
+            }
+            String name = String.valueOf(ctx.get(petArg)).trim().toLowerCase();
+            UUID uuid = player.getUuid();
+            if (name.equals("off")) {
+                ok(ctx, pets.removeFor(uuid, store)
+                        ? "Pet removed." : "You have no pet out.");
+                return;
+            }
+            String role = PETS.get(name);
+            if (role == null) {
+                err(ctx, "No such pet. Choose from: " + String.join(", ", PETS.keySet())
+                        + " — or off.");
+                return;
+            }
+            var transform = store.getComponent(ref,
+                    com.hypixel.hytale.server.core.modules.entity.component.TransformComponent
+                            .getComponentType());
+            if (transform == null || transform.getPosition() == null) {
+                err(ctx, "Could not read your position.");
+                return;
+            }
+            String failure = pets.spawn(store, uuid,
+                    new org.joml.Vector3d(transform.getPosition()), role);
+            if (failure != null) {
+                err(ctx, "Pet spawn failed: " + failure);
+                plugin.log().warn("Pet spawn failed for " + uuid + ": " + failure);
+                return;
+            }
+            ok(ctx, "Pet out: " + name + ". Walk around — it should follow within a second "
+                    + "or two, and teleport to you if left more than 40 blocks behind.");
+            info(ctx, "Watch for: does it animate, does it keep up when you sprint, does it "
+                    + "get in the way. /supporter pettest off removes it.");
         }
     }
 
