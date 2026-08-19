@@ -465,6 +465,24 @@ public final class SupporterPlugin extends JavaPlugin {
     }
 
     /**
+     * Opens the 0.23.0 redesign spike — the flat-colour shell with only its Status screen.
+     * Separate entry point on purpose: the live panel above must keep working untouched while
+     * the new look is judged in game.
+     */
+    public boolean openFlatPanel(PlayerRef player, Store<EntityStore> store, World world) {
+        if (!hyUiPresent()) {
+            return false;
+        }
+        try {
+            return new com.peoplesserver.supportermod.ui.FlatPanel(this)
+                    .open(player, store, world);
+        } catch (Throwable t) {
+            log.warn("Flat panel unavailable: " + t);
+            return false;
+        }
+    }
+
+    /**
      * Whether HyUI's classes are loadable, resolved once on FIRST USE and never during setup.
      *
      * <p>Probing at startup is how the LuckPerms integration silently did nothing for a whole

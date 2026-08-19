@@ -81,6 +81,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new QuestsSub(plugin));
         addSubCommand(new PetSub(plugin));
         addSubCommand(new PettestSub(plugin));
+        addSubCommand(new UitestSub(plugin));
         addSubCommand(new ChargebackSub(plugin));
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
@@ -1233,6 +1234,36 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             }
             ok(ctx, "Pet out: " + name + "! It follows you and stays across relogs.");
             info(ctx, "/supporter pet off sends it home.");
+        }
+    }
+
+    // --- /supporter uitest (SPIKE) ------------------------------------------------------------
+
+    /**
+     * Opens the panel redesign spike: the flat-colour shell and its Status screen. Admin-only
+     * and additive — {@code /supporter} still opens the live panel, so the redesign can be
+     * judged in game without anybody else seeing a half-converted UI.
+     */
+    public static final class UitestSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public UitestSub(SupporterPlugin plugin) {
+            super("uitest", "ADMIN: preview the redesigned panel (Status screen only).");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            if (plugin.openFlatPanel(player, store, world)) {
+                info(ctx, "Redesign preview open. Judge the surfaces, not the wiring - the nav "
+                        + "is inert and only Status is built.");
+                info(ctx, "Check the probe strip at the bottom: whichever swatches are visible "
+                        + "name the fill texture path that resolves.");
+                return;
+            }
+            err(ctx, "Could not open the preview - HyUI may be unavailable.");
         }
     }
 
