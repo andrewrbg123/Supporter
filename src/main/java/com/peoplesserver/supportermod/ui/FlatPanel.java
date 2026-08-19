@@ -45,10 +45,17 @@ import java.util.function.BiConsumer;
  * mechanism every other interaction here uses, which is proven, rather than a layout mode that
  * is not. The cost is that a page holds every screen at once; the live panel already did that.
  *
- * <p><b>Nothing scrolls.</b> {@code TopScrolling} exists as a layout mode and would retire the
- * row ceilings this plugin keeps fighting, but it is unproven, and an unproven UI value costs a
- * disconnect rather than a glitch. Every screen here is laid out to fit 788px instead. That is
- * the next experiment, not this one.
+ * <p><b>Nothing scrolls, and that is now a settled answer rather than an open question.</b>
+ * {@code TopScrolling} was tried in 0.26.0 and reverted: the mode REFLOWS its children, placing
+ * each after the last, so absolute anchors are discarded and every screen comes apart. It is
+ * reachable only by a layout designed as a flow from the start, which this is not. Every screen
+ * is therefore laid out to fit the 788px panel, and adding to a catalogue still means checking
+ * the rows.
+ *
+ * <p>The probe that wrongly cleared it is the lesson: twelve rows evenly spaced at one x looks
+ * the same under absolute positioning AND under a vertical flow, so it could only ever return
+ * yes. A probe must be built to tell the candidates apart — varied positions, uneven gaps —
+ * rather than to look like success.
  */
 public final class FlatPanel {
 
