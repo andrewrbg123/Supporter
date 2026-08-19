@@ -376,7 +376,9 @@ public final class SupporterPanel {
 
         tab = (TabContentBuilder) tab.addChild(line(BALANCE_ID,
                 balanceText(service, uuid), theme.heading(), row));
-        row += 2;
+        // No blank row after the balance since 0.22.1 — nine pets need two grid rows, and
+        // this is where the row came from. The tab sits at exactly 13 rows, the ceiling.
+        row++;
 
         if (!service.isSupporter(uuid)) {
             tab = (TabContentBuilder) tab.addChild(line("ShopLocked",
@@ -419,6 +421,9 @@ public final class SupporterPanel {
                 "Pets — cosmetic followers; wear them from the Wardrobe tab",
                 theme.heading(), row++));
         index = 0;
+        // Five per row at 176 wide: "tortoise · 400" (14 characters) renders full-size at
+        // 176, and five columns keep nine pets to two rows — 5 x 176 + 4 x 8 = 912, flush
+        // with the content width.
         for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
             int cost = config.petCost(petName);
             if (cost <= 0) {
@@ -426,15 +431,15 @@ public final class SupporterPanel {
             }
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     petBuyId(petName), petName + " · " + cost, theme.buttonLabel(),
-                    (index % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
-                    (row + (index / SKIN_COLS)) * ROW_HEIGHT - 4,
-                    SKIN_BUY_WIDTH,
+                    (index % 5) * (176 + 8),
+                    (row + (index / 5)) * ROW_HEIGHT - 4,
+                    176,
                     (Void v, au.ellie.hyui.events.UIContext ctx) ->
                             buyPet(service, uuid, petName, cost, world, ctx))
                     .withVisible(!service.ownsPet(uuid, petName, cost)));
             index++;
         }
-        row += Math.max(1, (index + SKIN_COLS - 1) / SKIN_COLS);
+        row += Math.max(1, (index + 4) / 5);
 
         tab = (TabContentBuilder) tab.addChild(line("ShopGearHead",
                 "Gear — capes and hats; the Wardrobe tab delivers them", theme.heading(), row++));
@@ -1255,10 +1260,11 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("WdPets",
                 "Pets — one follower at a time; they cannot fight", theme.heading(), row++));
         index = 0;
+        // A grid since 0.22.1: nine pets plus "no pet" stopped fitting one row.
         for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdPet_" + petName, petName, theme.buttonLabel(),
-                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
                             service, uuid, playerRef, petName, world, ctx))
                     .withVisible(service.ownsPet(uuid, petName,
@@ -1267,10 +1273,10 @@ public final class SupporterPanel {
         }
         tab = (TabContentBuilder) tab.addChild(wearButton(
                 "WdPet_off", "no pet", theme.buttonLabel(),
-                index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                 (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
                         service, uuid, playerRef, null, world, ctx)));
-        row += 2;
+        row += 3;
 
         // Tighter gap than the other sections: the rack is three rows deep and the panel
         // notice line sits below the content area.

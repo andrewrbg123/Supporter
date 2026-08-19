@@ -589,6 +589,12 @@ public final class SupporterConfig {
         out.put("bunny", 200);
         out.put("fox", 450);
         out.put("penguin", 450);
+        out.put("squirrel", 250);
+        out.put("mouse", 250);
+        out.put("frog", 300);
+        out.put("duck", 300);
+        out.put("meerkat", 400);
+        out.put("tortoise", 400);
         return out;
     }
 

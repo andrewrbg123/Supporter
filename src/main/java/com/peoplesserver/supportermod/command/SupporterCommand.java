@@ -1128,6 +1128,15 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             PETS.put("bunny", "SupporterPet_Bunny");
             PETS.put("fox", "SupporterPet_Fox");
             PETS.put("penguin", "SupporterPet_Penguin");
+            // The 0.22.1 batch — all walkers on the proven recipe (fliers like the owl and
+            // parrot wait until a pettest proves a flying rig walks acceptably). Each of
+            // these still gets a pettest look before players are pointed at it.
+            PETS.put("squirrel", "SupporterPet_Squirrel");
+            PETS.put("mouse", "SupporterPet_Mouse");
+            PETS.put("meerkat", "SupporterPet_Meerkat");
+            PETS.put("frog", "SupporterPet_Frog");
+            PETS.put("duck", "SupporterPet_Duck");
+            PETS.put("tortoise", "SupporterPet_Tortoise");
         }
 
         private final SupporterPlugin plugin;
