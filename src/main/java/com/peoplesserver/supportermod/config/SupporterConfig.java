@@ -403,6 +403,7 @@ public final class SupporterConfig {
         backfillTrailCosts();
         backfillSkinCosts();
         backfillGearCosts();
+        backfillPetCosts();
     }
 
     /**
@@ -566,6 +567,51 @@ public final class SupporterConfig {
                                  // prices nothing and is harmless
         out.put("wizard", 200);
         return out;
+    }
+
+    /**
+     * Pet name → cost in tokens. Pets are the premium tier — every one is priced, and the
+     * bunny is the deliberate entry point (two days of dailies). Own {@code pet:} unlock
+     * namespace; same grandfathering rule as everything else: the tick re-spawns a stored
+     * choice without re-checking ownership.
+     */
+    private Map<String, Integer> petCosts = defaultPetCosts();
+
+    /**
+     * Server-wide cap on live pets, the trails' maxConcurrentTrails lesson applied to NPCs:
+     * cost must not scale with sales. Selection past the cap stays stored and spawns when
+     * room frees up.
+     */
+    private int maxConcurrentPets = 20;
+
+    static Map<String, Integer> defaultPetCosts() {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        out.put("bunny", 200);
+        out.put("fox", 450);
+        out.put("penguin", 450);
+        return out;
+    }
+
+    private void backfillPetCosts() {
+        if (petCosts == null) {
+            petCosts = new LinkedHashMap<>();
+        } else {
+            petCosts = new LinkedHashMap<>(petCosts);
+        }
+        defaultPetCosts().forEach(petCosts::putIfAbsent);
+    }
+
+    /** Cost of a pet in tokens. Anything not listed is free — which no shipped pet is. */
+    public int petCost(String name) {
+        if (name == null || petCosts == null) {
+            return 0;
+        }
+        Integer cost = petCosts.get(name.toLowerCase());
+        return cost == null ? 0 : Math.max(0, cost);
+    }
+
+    public int maxConcurrentPets() {
+        return Math.max(0, maxConcurrentPets);
     }
 
     private void backfillGearCosts() {

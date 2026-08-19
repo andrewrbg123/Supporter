@@ -200,6 +200,37 @@ class SupporterConfigTest {
             assertTrue(names.contains(priced),
                     "priced gear '" + priced + "' is not in any catalogue - it would gate nothing");
         }
+
+        // Pets are their own namespace and their own map; same guard, separately.
+        java.util.regex.Matcher pm = java.util.regex.Pattern
+                .compile("PETS\\.put\\(\"([a-z-]+)\"").matcher(src);
+        List<String> petNames = new ArrayList<>();
+        while (pm.find()) {
+            petNames.add(pm.group(1));
+        }
+        assertFalse(petNames.isEmpty(), "pet catalogue scan found nothing");
+        assertEquals(petNames.size(), petNames.stream().distinct().count(),
+                "pet names must be unique: " + petNames);
+        for (String priced : SupporterConfig.defaultPetCosts().keySet()) {
+            assertTrue(petNames.contains(priced),
+                    "priced pet '" + priced + "' is not in the catalogue - it would gate nothing");
+        }
+    }
+
+    @Test
+    @DisplayName("pet prices land in a live config through the per-key backfill")
+    void petCostsBackfillPerKey(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("supporter.json");
+        Files.writeString(file, """
+                {"petCosts": {"bunny": 123}}
+                """, StandardCharsets.UTF_8);
+
+        SupporterConfig config = SupporterConfig.load(file);
+
+        assertEquals(123, config.petCost("bunny"), "the admin's own price must survive");
+        assertEquals(450, config.petCost("fox"), "new keys arrive per key");
+        assertEquals(20, config.maxConcurrentPets());
+        assertEquals(0, config.petCost(null));
     }
 
     @Test

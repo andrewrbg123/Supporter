@@ -340,6 +340,17 @@ public final class SupporterService {
                 clean == null ? "cleared" : clean);
     }
 
+    /**
+     * Sets or clears the chosen pet. Null or blank clears it. Same layering as
+     * {@link #setSkin}: the catalogue lives in the command layer, which validates before
+     * calling; a stored name that leaves the catalogue is ignored by the tick, not an error.
+     */
+    public synchronized SupporterIdentity setPet(UUID uuid, String pet) {
+        String clean = pet == null || pet.isBlank() ? null : pet.trim().toLowerCase();
+        return writeIdentity(uuid, identity(uuid).withPet(clean), "PET",
+                clean == null ? "cleared" : clean);
+    }
+
     public synchronized SupporterIdentity setHideTrails(UUID uuid, boolean hide) {
         return writeIdentity(uuid, identity(uuid).withHideTrails(hide), "TRAIL_VISIBILITY",
                 hide ? "hidden" : "shown");
@@ -746,6 +757,53 @@ public final class SupporterService {
             });
         } catch (SQLException e) {
             throw new StorageException("Failed to claim quest " + questKey, e);
+        }
+    }
+
+    /**
+     * Buys a pet unlock — fourth user of the trail machinery, fourth namespace:
+     * {@code pet:<name>}. Cost from the caller; the catalogue lives in the command layer.
+     */
+    public synchronized PurchaseResult purchasePet(UUID uuid, String petName, int cost) {
+        Objects.requireNonNull(uuid, "uuid");
+        if (petName == null || petName.isBlank()) {
+            return PurchaseResult.UNKNOWN_ITEM;
+        }
+        if (cost <= 0) {
+            return PurchaseResult.FREE;
+        }
+        String unlockId = "pet:" + petName.toLowerCase();
+        try {
+            return storage.transact(() -> {
+                if (storage.ownsUnlock(uuid, unlockId)) {
+                    return PurchaseResult.ALREADY_OWNED;
+                }
+                int balance = Math.max(0, tokensEarned(uuid) - storage.totalSpent(uuid));
+                if (balance < cost) {
+                    return PurchaseResult.NOT_ENOUGH_TOKENS;
+                }
+                long now = clock.millis();
+                if (!storage.addUnlock(uuid, unlockId, cost, now)) {
+                    return PurchaseResult.ALREADY_OWNED; // lost a race; nothing charged
+                }
+                storage.log(uuid, directory.usernameFor(uuid).orElse(null),
+                        "PURCHASE", unlockId + " for " + cost + " tokens", "player", now);
+                return PurchaseResult.BOUGHT;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Failed to purchase pet " + petName, e);
+        }
+    }
+
+    /** Whether this player may keep a pet that costs {@code cost}. Free means yes. */
+    public boolean ownsPet(UUID uuid, String petName, int cost) {
+        if (cost <= 0) {
+            return true;
+        }
+        try {
+            return storage.ownsUnlock(uuid, "pet:" + petName.toLowerCase());
+        } catch (SQLException e) {
+            throw new StorageException("Failed to check pet unlock " + petName, e);
         }
     }
 

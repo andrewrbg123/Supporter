@@ -290,7 +290,7 @@ public final class SupporterStorage implements AutoCloseable {
         try (PreparedStatement ps =
                 conn().prepareStatement(
                         """
-                        SELECT title, chat_color, trail, skin, hide_trails
+                        SELECT title, chat_color, trail, skin, pet, hide_trails
                         FROM supporter_identity WHERE uuid = ?
                         """)) {
             ps.setString(1, uuid.toString());
@@ -303,6 +303,7 @@ public final class SupporterStorage implements AutoCloseable {
                         rs.getString("chat_color"),
                         rs.getString("trail"),
                         rs.getString("skin"),
+                        rs.getString("pet"),
                         rs.getInt("hide_trails") != 0);
             }
         }
@@ -320,13 +321,14 @@ public final class SupporterStorage implements AutoCloseable {
                 conn().prepareStatement(
                         """
                         INSERT INTO supporter_identity
-                            (uuid, title, chat_color, trail, skin, hide_trails, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                            (uuid, title, chat_color, trail, skin, pet, hide_trails, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(uuid) DO UPDATE SET
                             title = excluded.title,
                             chat_color = excluded.chat_color,
                             trail = excluded.trail,
                             skin = excluded.skin,
+                            pet = excluded.pet,
                             hide_trails = excluded.hide_trails,
                             updated_at = excluded.updated_at
                         """)) {
@@ -335,8 +337,9 @@ public final class SupporterStorage implements AutoCloseable {
             ps.setString(3, identity.chatColor());
             ps.setString(4, identity.trail());
             ps.setString(5, identity.skin());
-            ps.setInt(6, identity.hideTrails() ? 1 : 0);
-            ps.setLong(7, atMs);
+            ps.setString(6, identity.pet());
+            ps.setInt(7, identity.hideTrails() ? 1 : 0);
+            ps.setLong(8, atMs);
             ps.executeUpdate();
         }
     }

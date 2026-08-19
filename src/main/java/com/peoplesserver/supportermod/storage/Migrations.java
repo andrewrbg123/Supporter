@@ -185,6 +185,13 @@ final class Migrations {
                 // only the catalogue name players type and buy under.
                 "UPDATE supporter_unlocks SET item_id = 'gear:top-hat'"
                         + " WHERE item_id = 'gear:top'"
+            },
+            // --- V8: v0.22.0 pets ---------------------------------------------------------
+            new String[] {
+                // The chosen pet, re-spawned by the pet tick whenever the owner is online.
+                // Same rules as every identity column: outlives a lapse (stops spawning, is
+                // not deleted), and a name no longer in the catalogue is ignored.
+                "ALTER TABLE supporter_identity ADD COLUMN pet TEXT"
             });
 
     static void apply(Connection conn) throws SQLException {

@@ -79,6 +79,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new ShopSub(plugin));
         addSubCommand(new BuySub(plugin));
         addSubCommand(new QuestsSub(plugin));
+        addSubCommand(new PetSub(plugin));
         addSubCommand(new PettestSub(plugin));
         addSubCommand(new ChargebackSub(plugin));
         addSubCommand(new GrantSub(plugin));
@@ -561,6 +562,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "  Quests: 3 dailies at " + config.questDailyReward()
                     + " tokens, a weekly at " + config.questWeeklyReward()
                     + " — /supporter quests");
+            info(ctx, "  Pets — " + String.join(", ", PetSub.PETS.keySet())
+                    + ": /supporter pet");
 
             if (active) {
                 info(ctx, "");
@@ -627,6 +630,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    Headwear and trainers — " + String.join(", ", HatSub.HATS.keySet()) + ", trainers");
             info(ctx, "    Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
+            info(ctx, "    Pets — cosmetic followers that cannot fight: "
+                    + String.join(", ", PetSub.PETS.keySet()));
             info(ctx, "    " + config.tokensPerMonth()
                     + " tokens a month, plus daily and weekly quests that pay more");
             info(ctx, "");
@@ -1099,17 +1104,24 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         }
     }
 
-    // --- /supporter pettest (SPIKE) -----------------------------------------------------------
+    // --- /supporter pet -----------------------------------------------------------------------
 
     /**
-     * Admin-only spike, the capetest of pets: spawns a cosmetic follower NPC and answers the
-     * questions only a live look can — does a creature rig animate on a Generic role, does the
-     * A* follow keep up, does the pet interfere with anything. Delete or promote once
-     * answered.
+     * {@code /supporter pet} — cosmetic followers, the premium tier of the shop.
+     *
+     * <p>The pet cannot fight, aggro or be commanded to: the roles are {@code Type:"Generic"},
+     * which has no combat tree, so the pay-to-win line is enforced by the role type itself.
+     * The choice persists; the pet tick re-spawns it at login and across world changes, and a
+     * killed pet is back within a second — a cosmetic must not be killable in any way that
+     * matters.
      */
-    public static final class PettestSub extends AbstractPlayerCommand {
+    public static final class PetSub extends PublicPlayerCommand {
 
-        /** Pet name → role file stem in our asset pack's Server/NPC/Roles/. */
+        /**
+         * Pet name → NPC role in our asset pack. THE catalogue — the panel, the pet tick and
+         * pettest all read this map. Entries are added only after the rig passed a pettest
+         * look (spawns, ANIMATES, follows): bunny, fox and penguin all did on 2026-08-19.
+         */
         public static final java.util.Map<String, String> PETS = new java.util.LinkedHashMap<>();
 
         static {
@@ -1119,12 +1131,111 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         }
 
         private final SupporterPlugin plugin;
+
+        public PetSub(SupporterPlugin plugin) {
+            super("pet", "Your supporter pet: " + String.join(", ", PETS.keySet())
+                    + " - or off.");
+            setPermissionGroup(GameMode.Adventure);
+            addAliases(new String[] {"pets"});
+            this.plugin = plugin;
+            addUsageVariant(new PetChoiceVariant(plugin));
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            // Bare form informs, visible to non-supporters — seeing the pets is the pitch.
+            ok(ctx, "Pets: " + String.join(", ", PETS.keySet())
+                    + " - cosmetic followers. They cannot fight, for you or anyone.");
+            info(ctx, "/supporter pet <name> to bring one out; /supporter pet off sends it "
+                    + "home. It follows you and stays across relogs.");
+        }
+    }
+
+    /** The {@code /supporter pet <name|off>} form. */
+    public static final class PetChoiceVariant extends PublicPlayerCommand {
+        private final SupporterPlugin plugin;
+        private final Argument petArg;
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public PetChoiceVariant(SupporterPlugin plugin) {
+            super("Bring out a pet by name, or off to send it home.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+            this.petArg = withRequiredArg("pet", "pet name, or off",
+                    (ArgumentType) ArgTypes.STRING);
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            var pets = plugin.pets();
+            if (pets == null) {
+                err(ctx, "Pets unavailable — the plugin failed to start.");
+                return;
+            }
+            UUID uuid = player.getUuid();
+            String name = String.valueOf(ctx.get(petArg)).trim().toLowerCase();
+            if (name.equals("off")) {
+                service.setPet(uuid, null);
+                pets.removeFor(uuid, store);
+                ok(ctx, "Pet sent home.");
+                return;
+            }
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "Pets are a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            String role = PetSub.PETS.get(name);
+            if (role == null) {
+                err(ctx, "No such pet. Choose from: " + String.join(", ", PetSub.PETS.keySet())
+                        + " - or off.");
+                return;
+            }
+            int cost = plugin.config().petCost(name);
+            if (!service.ownsPet(uuid, name, cost)) {
+                err(ctx, "The " + name + " is locked — " + cost + " tokens. /supporter buy "
+                        + name + ", or the Shop tab.");
+                return;
+            }
+            service.setPet(uuid, name);
+            var transform = store.getComponent(ref,
+                    com.hypixel.hytale.server.core.modules.entity.component.TransformComponent
+                            .getComponentType());
+            String failure = transform == null || transform.getPosition() == null
+                    ? "could not read your position — it will appear within a second or two"
+                    : pets.spawn(store, uuid,
+                            new org.joml.Vector3d(transform.getPosition()), role);
+            if (failure != null) {
+                info(ctx, "Saved: " + failure);
+                return;
+            }
+            ok(ctx, "Pet out: " + name + "! It follows you and stays across relogs.");
+            info(ctx, "/supporter pet off sends it home.");
+        }
+    }
+
+    // --- /supporter pettest (SPIKE) -----------------------------------------------------------
+
+    /**
+     * The spike that proved pets (2026-08-19: all three rigs animate, follow and clean up),
+     * kept as the ADMIN RIG-VETTING TOOL: spawns without ownership, persistence or entitlement
+     * so a new candidate role can be eyeballed before it earns a PetSub.PETS entry. Reads the
+     * same catalogue as the real command — one source of truth.
+     */
+    public static final class PettestSub extends AbstractPlayerCommand {
+
+        private final SupporterPlugin plugin;
         private final Argument petArg;
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         public PettestSub(SupporterPlugin plugin) {
-            super("pettest", "SPIKE: spawn a follower pet - <"
-                    + String.join("|", PETS.keySet()) + "|off>");
+            super("pettest", "ADMIN rig vetting: spawn a follower pet - <"
+                    + String.join("|", PetSub.PETS.keySet()) + "|off>");
             setPermissionGroup(GameMode.Creative);
             this.plugin = plugin;
             this.petArg = withRequiredArg("pet", "pet name, or off",
@@ -1146,9 +1257,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                         ? "Pet removed." : "You have no pet out.");
                 return;
             }
-            String role = PETS.get(name);
+            String role = PetSub.PETS.get(name);
             if (role == null) {
-                err(ctx, "No such pet. Choose from: " + String.join(", ", PETS.keySet())
+                err(ctx, "No such pet. Choose from: " + String.join(", ", PetSub.PETS.keySet())
                         + " — or off.");
                 return;
             }
@@ -1280,8 +1391,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                     result = service.purchaseSkin(uuid, item, cost);
                     wearHint = "/supporter skin " + item;
                 }
-                // Third catalogue: wearables. Same order every time — trails, skins, gear —
-                // so a colliding name always resolves the same way.
+                // Third catalogue: wearables. Same order every time — trails, skins, gear,
+                // pets — so a colliding name always resolves the same way.
                 if (result == SupporterService.PurchaseResult.UNKNOWN_ITEM) {
                     String lower = item.toLowerCase();
                     String getHint = CapeSub.DESIGNS.containsKey(lower) ? "/supporter cape "
@@ -1291,6 +1402,14 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                         result = service.purchaseGear(uuid, lower,
                                 plugin.config().gearCost(lower));
                         wearHint = getHint + lower;
+                    }
+                }
+                // Fourth catalogue: pets.
+                if (result == SupporterService.PurchaseResult.UNKNOWN_ITEM) {
+                    String lower = item.toLowerCase();
+                    if (PetSub.PETS.containsKey(lower)) {
+                        result = service.purchasePet(uuid, lower, plugin.config().petCost(lower));
+                        wearHint = "/supporter pet " + lower;
                     }
                 }
                 String hint = wearHint;

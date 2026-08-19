@@ -142,6 +142,22 @@ class SupporterTokensTest {
     }
 
     @Test
+    @DisplayName("pets live in their own namespace and never grant a trail, skin or gear")
+    void petNamespaceIsSeparate() {
+        giveTokens(500);
+
+        assertEquals(PurchaseResult.BOUGHT, service.purchasePet(ALICE, "fox", 450));
+        assertTrue(service.ownsPet(ALICE, "fox", 450));
+        assertTrue(service.unlocks(ALICE).contains("pet:fox"));
+        assertFalse(service.ownsGear(ALICE, "fox", 100),
+                "a hypothetical fox HAT would not be granted by the fox PET");
+        assertEquals(50, service.tokenBalance(ALICE));
+
+        assertEquals(PurchaseResult.ALREADY_OWNED, service.purchasePet(ALICE, "fox", 450));
+        assertEquals(50, service.tokenBalance(ALICE), "a second buy must not deduct again");
+    }
+
+    @Test
     @DisplayName("free gear is owned by everyone and never charged")
     void freeGearIsOwned() {
         // Cost 0 is what every pre-0.20.0 wearable reports: absent from gearCosts entirely.

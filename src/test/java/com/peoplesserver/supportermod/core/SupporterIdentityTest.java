@@ -107,6 +107,21 @@ class SupporterIdentityTest {
     }
 
     @Test
+    @DisplayName("the chosen pet survives a restart, and off clears it")
+    void petSurvivesRestart() {
+        // Same guard shape as the skin column: the V5 bug was a write path that worked while
+        // the read SELECT silently omitted the new column. Fresh-service round trip catches it.
+        service.setPet(ALICE, "Bunny");
+
+        SupporterService restarted = newService();
+        assertEquals("bunny", restarted.identity(ALICE).pet(),
+                "stored lowercased, read back after restart");
+
+        restarted.setPet(ALICE, null);
+        assertNull(newService().identity(ALICE).pet(), "off must clear the stored choice");
+    }
+
+    @Test
     @DisplayName("a blank title clears rather than storing whitespace")
     void blankClears() {
         service.setTitle(ALICE, "Founder");

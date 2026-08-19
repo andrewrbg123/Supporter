@@ -209,9 +209,12 @@ public final class SupporterPlugin extends JavaPlugin {
             long trailMs = Math.max(50L, config.trailIntervalTicks() * 50L);
             this.trailTask = scheduler.scheduleRepeating(trails::tick, trailMs, trailMs);
 
-            // 0.21.5 SPIKE: pets. One-second follow tick; the system is idle while nobody
-            // has a pet out. Promoted to a real perk only if the live test passes.
-            this.petSystem = new PetSystem(log);
+            // 0.22.0: pets, spike-proven the same day it shipped. The one-second tick does
+            // the following, the login/world-change re-spawn from the stored identity, and
+            // the orphan cleanup; the catalogue is PetSub's map, one source of truth.
+            this.petSystem = new PetSystem(service,
+                    com.peoplesserver.supportermod.command.SupporterCommand.PetSub.PETS,
+                    config::maxConcurrentPets, log);
             this.petTask = scheduler.scheduleRepeating(petSystem::tick, 1_000L, 1_000L);
 
             // 0.21.0: quests. The minute tick is EXACTLY 60s — each firing credits one minute

@@ -281,12 +281,15 @@ public final class SupporterPanel {
         // Skin and gear unlocks share the table under "skin:"/"gear:" namespaces (names collide
         // with trails), so split them out for display rather than showing the raw prefixed ids.
         List<String> trails = unlocks.stream()
-                .filter(u -> !u.startsWith("skin:") && !u.startsWith("gear:")).toList();
+                .filter(u -> !u.startsWith("skin:") && !u.startsWith("gear:")
+                        && !u.startsWith("pet:")).toList();
         List<String> skins = unlocks.stream().filter(u -> u.startsWith("skin:"))
                 .map(u -> u.substring(5)).toList();
         List<String> gear = unlocks.stream().filter(u -> u.startsWith("gear:"))
                 .map(u -> u.substring(5)).toList();
-        if (trails.isEmpty() && skins.isEmpty() && gear.isEmpty()) {
+        List<String> pets = unlocks.stream().filter(u -> u.startsWith("pet:"))
+                .map(u -> u.substring(4)).toList();
+        if (trails.isEmpty() && skins.isEmpty() && gear.isEmpty() && pets.isEmpty()) {
             return "Nothing bought yet - the free trails, gear and skins are yours already";
         }
         StringBuilder out = new StringBuilder();
@@ -298,6 +301,12 @@ public final class SupporterPanel {
                 out.append("   ");
             }
             out.append("Gear bought: ").append(String.join(", ", gear));
+        }
+        if (!pets.isEmpty()) {
+            if (out.length() > 0) {
+                out.append("   ");
+            }
+            out.append("Pets bought: ").append(String.join(", ", pets));
         }
         if (!skins.isEmpty()) {
             if (out.length() > 0) {
@@ -328,6 +337,9 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("PkHomes",
                 "Homes: " + config.supporterHomeSlots()
                         + " instead of " + config.defaultHomeSlots(), theme.body(), row++));
+        tab = (TabContentBuilder) tab.addChild(line("PkPets",
+                "Pets - cosmetic followers: " + String.join(", ",
+                        SupporterCommand.PetSub.PETS.keySet()), theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkQuests",
                 "Daily and weekly quests that pay tokens - the Quests tab",
                 theme.body(), row++));
@@ -384,6 +396,9 @@ public final class SupporterPanel {
         List<String> ids = new ArrayList<>(config.trails().keySet());
         ids.sort(Comparator.comparingInt(config::trailCost).thenComparing(id -> id));
         int index = 0;
+        // Six per row at the narrow width — trail names are short ("hearts · 150" is 12
+        // characters, full-size at 120), and the row this reclaims is what makes space for
+        // the Pets section below.
         for (String id : ids) {
             int cost = config.trailCost(id);
             if (cost <= 0) {
@@ -391,12 +406,32 @@ public final class SupporterPanel {
             }
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     buyId(id), id + " · " + cost, theme.buttonLabel(),
+                    (index % 6) * (BUY_WIDTH + 8),
+                    (row + (index / 6)) * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                            buy(service, uuid, id, world, ctx))
+                    .withVisible(!service.unlocks(uuid).contains(id)));
+            index++;
+        }
+        row += Math.max(1, (index + 5) / 6);
+
+        tab = (TabContentBuilder) tab.addChild(line("ShopPetsHead",
+                "Pets — cosmetic followers; wear them from the Wardrobe tab",
+                theme.heading(), row++));
+        index = 0;
+        for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
+            int cost = config.petCost(petName);
+            if (cost <= 0) {
+                continue;
+            }
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    petBuyId(petName), petName + " · " + cost, theme.buttonLabel(),
                     (index % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
                     (row + (index / SKIN_COLS)) * ROW_HEIGHT - 4,
                     SKIN_BUY_WIDTH,
                     (Void v, au.ellie.hyui.events.UIContext ctx) ->
-                            buy(service, uuid, id, world, ctx))
-                    .withVisible(!service.unlocks(uuid).contains(id)));
+                            buyPet(service, uuid, petName, cost, world, ctx))
+                    .withVisible(!service.ownsPet(uuid, petName, cost)));
             index++;
         }
         row += Math.max(1, (index + SKIN_COLS - 1) / SKIN_COLS);
@@ -567,6 +602,36 @@ public final class SupporterPanel {
         }
     }
 
+    private static String petBuyId(String petName) {
+        return "PetBuy_" + petName;
+    }
+
+    private void buyPet(SupporterService service, UUID uuid, String petName, int cost,
+                        World world, au.ellie.hyui.events.UIContext ctx) {
+        String note;
+        try {
+            note = switch (service.purchasePet(uuid, petName, cost)) {
+                case BOUGHT -> "Unlocked the " + petName
+                        + " — bring it out from the Wardrobe tab, or /supporter pet " + petName;
+                case ALREADY_OWNED -> "You already own the " + petName;
+                case NOT_ENOUGH_TOKENS -> "Not enough tokens for the " + petName;
+                case FREE -> "The " + petName + " is free — the Wardrobe tab has it";
+                case UNKNOWN_ITEM -> "That pet no longer exists";
+            };
+        } catch (RuntimeException e) {
+            plugin.log().error("Pet purchase failed for " + uuid + " (" + petName + ")", e);
+            note = "Purchase failed — try /supporter buy " + petName;
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                refreshAfterPurchase(service, uuid, ctx, message);
+            } catch (Throwable t) {
+                plugin.log().warn("Pet purchase refresh failed: " + t);
+            }
+        });
+    }
+
     /**
      * Every wearable design name, all three catalogues — the command maps stay the single
      * source of truth, so gear added to a command shows up here without panel changes.
@@ -724,6 +789,16 @@ public final class SupporterPanel {
                 SupporterCommand.HatSub.HATS.keySet(), "WdHat_");
         refreshGearButtons(service, uuid, ctx,
                 SupporterCommand.ShoesSub.SHOES.keySet(), "WdShoe_");
+        // Pets, both places at once — same split as everything else.
+        for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
+            int petCost = plugin.config().petCost(petName);
+            if (petCost > 0) {
+                ctx.editById(petBuyId(petName), CustomButtonBuilder.class,
+                        b -> b.withVisible(!service.ownsPet(uuid, petName, petCost)));
+            }
+            ctx.editById("WdPet_" + petName, CustomButtonBuilder.class,
+                    b -> b.withVisible(service.ownsPet(uuid, petName, petCost)));
+        }
         // A purchase changes which skin buttons show in BOTH places: the Shop button
         // disappears, the Wardrobe button appears.
         for (String skinName : SkinChanger.allNames()) {
@@ -1177,6 +1252,26 @@ public final class SupporterPanel {
         }
         row += 2;
 
+        tab = (TabContentBuilder) tab.addChild(line("WdPets",
+                "Pets — one follower at a time; they cannot fight", theme.heading(), row++));
+        index = 0;
+        for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    "WdPet_" + petName, petName, theme.buttonLabel(),
+                    index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
+                            service, uuid, playerRef, petName, world, ctx))
+                    .withVisible(service.ownsPet(uuid, petName,
+                            plugin.config().petCost(petName))));
+            index++;
+        }
+        tab = (TabContentBuilder) tab.addChild(wearButton(
+                "WdPet_off", "no pet", theme.buttonLabel(),
+                index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
+                (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
+                        service, uuid, playerRef, null, world, ctx)));
+        row += 2;
+
         // Tighter gap than the other sections: the rack is three rows deep and the panel
         // notice line sits below the content area.
         row--;
@@ -1285,6 +1380,57 @@ public final class SupporterPanel {
                 .withHoveredBackground(theme.tabHovered())
                 .withPressedBackground(theme.tabPressed());
         return button.addEventListener(CustomUIEventBindingType.Activating, onClick);
+    }
+
+    /** Pet buttons: persist the choice, then spawn on the world thread. Null sends it home. */
+    private void wearPet(SupporterService service, UUID uuid, PlayerRef playerRef,
+                         String petName, World world, au.ellie.hyui.events.UIContext ctx) {
+        world.execute(() -> {
+            String note;
+            try {
+                var pets = plugin.pets();
+                Ref<EntityStore> ref = playerRef.getReference();
+                Store<EntityStore> store = ref == null ? null : ref.getStore();
+                if (pets == null || store == null) {
+                    note = "Pets unavailable — try /supporter pet instead.";
+                } else if (petName == null) {
+                    service.setPet(uuid, null);
+                    pets.removeFor(uuid, store);
+                    note = "Pet sent home.";
+                } else if (!service.isSupporter(uuid)) {
+                    note = "Pets are a supporter perk — see the About tab.";
+                } else if (!service.ownsPet(uuid, petName, plugin.config().petCost(petName))) {
+                    note = "The " + petName + " is locked — "
+                            + plugin.config().petCost(petName) + " tokens in the Shop tab.";
+                } else {
+                    service.setPet(uuid, petName);
+                    String role = SupporterCommand.PetSub.PETS.get(petName);
+                    var transform = store.getComponent(ref,
+                            com.hypixel.hytale.server.core.modules.entity.component
+                                    .TransformComponent.getComponentType());
+                    String failure = role == null
+                            ? "that pet is no longer in the catalogue"
+                            : transform == null || transform.getPosition() == null
+                                    ? "it will appear beside you within a second or two"
+                                    : pets.spawn(store, uuid,
+                                            new org.joml.Vector3d(transform.getPosition()),
+                                            role);
+                    note = failure == null
+                            ? "Pet out: " + petName + "! It follows you and stays across relogs."
+                            : "Saved: " + failure;
+                }
+            } catch (Throwable t) {
+                plugin.log().error("Pet wear failed for " + uuid + " (" + petName + ")", t);
+                note = "Could not change your pet — try /supporter pet " + petName;
+            }
+            String message = note;
+            try {
+                ctx.editById(NOTICE_ID, LabelBuilder.class, l -> l.withText(message));
+                ctx.updatePage(false);
+            } catch (Throwable t) {
+                plugin.log().warn("Pet notice refresh failed: " + t);
+            }
+        });
     }
 
     private void giveWearable(SupporterService service, UUID uuid, PlayerRef playerRef,

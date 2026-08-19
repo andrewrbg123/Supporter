@@ -11,12 +11,15 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
+import com.peoplesserver.supportermod.core.SupporterIdentity;
+import com.peoplesserver.supportermod.core.SupporterService;
 import com.peoplesserver.supportermod.platform.PluginLog;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 import org.joml.Vector3d;
 
 /**
@@ -49,10 +52,19 @@ public final class PetSystem {
     /** Owner uuid → live pet. */
     private final Map<UUID, Pet> pets = new ConcurrentHashMap<>();
 
+    private final SupporterService service;
+    /** Pet name → role name; the command layer's catalogue, shared not copied. */
+    private final Map<String, String> catalogue;
+    /** Server-wide live-pet cap, read from config each time so a config edit applies live. */
+    private final IntSupplier cap;
     private final PluginLog log;
     private volatile long lastWarnAt;
 
-    public PetSystem(PluginLog log) {
+    public PetSystem(SupporterService service, Map<String, String> catalogue, IntSupplier cap,
+                     PluginLog log) {
+        this.service = service;
+        this.catalogue = catalogue;
+        this.cap = cap;
         this.log = log;
     }
 
@@ -70,6 +82,10 @@ public final class PetSystem {
         }
         if (!npcPlugin.hasRoleName(roleName)) {
             return "pet role " + roleName + " is not loaded — check the boot log";
+        }
+        if (!pets.containsKey(ownerUuid) && pets.size() >= cap.getAsInt()) {
+            return "the pet stable is full right now — your choice is saved and your pet "
+                    + "will appear when room frees up";
         }
         removeFor(ownerUuid, store);
         var pair = npcPlugin.spawnNPC(store, roleName, null,
@@ -104,9 +120,8 @@ public final class PetSystem {
 
     /** Called from the scheduler thread. Does no world work itself. */
     public void tick() {
-        if (pets.isEmpty()) {
-            return;
-        }
+        // No early-out on an empty map: the auto-spawn pass is what brings a stored pet back
+        // at login, after a world change, or after something killed it.
         try {
             Universe universe = Universe.get();
             if (universe == null) {
@@ -190,6 +205,30 @@ public final class PetSystem {
                     pets.put(entry.getKey(), pet);
                 }
                 stamp(store, pet.ref, ownerPos);
+            }
+
+            // Auto-spawn pass: anyone here whose identity names a pet but has none live gets
+            // it back — this IS the login re-spawn, the world-change re-spawn, and the
+            // killed-pet recovery, all one mechanism. Deliberately does NOT re-check
+            // ownership: a stored choice keeps working, the same grandfathering rule as the
+            // skins. Entitlement IS checked — a lapsed supporter's pet stays stored but stops
+            // spawning, like every perk.
+            for (Map.Entry<UUID, Vector3d> player : playersHere.entrySet()) {
+                if (pets.containsKey(player.getKey())) {
+                    continue;
+                }
+                SupporterIdentity identity = service.identity(player.getKey());
+                if (!identity.hasPet() || !service.isSupporter(player.getKey())) {
+                    continue;
+                }
+                String role = catalogue.get(identity.pet());
+                if (role == null) {
+                    continue; // name left the catalogue; ignored, not an error
+                }
+                if (pets.size() >= cap.getAsInt()) {
+                    break; // at the server-wide cap; try again next tick
+                }
+                spawn(store, player.getKey(), player.getValue(), role);
             }
         } catch (Throwable t) {
             warnOccasionally("Pet tickWorld failed", t);
