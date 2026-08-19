@@ -390,6 +390,7 @@ public final class SupporterConfig {
         backfillTrails();
         backfillTrailCosts();
         backfillSkinCosts();
+        backfillGearCosts();
     }
 
     /**
@@ -430,6 +431,12 @@ public final class SupporterConfig {
         out.put("gold", 200);
         out.put("heal", 250);
         out.put("morph", 300);
+        out.put("hearts", 150);
+        out.put("zzz", 150);
+        out.put("rage", 200);
+        out.put("toxic", 250);
+        out.put("rune", 300);
+        out.put("disco", 400); // seven spawners; the flagship trail carries its own weight
         return out;
     }
 
@@ -514,6 +521,59 @@ public final class SupporterConfig {
         out.put("morph", "Potion_Morph_Burst");        // 2.0s   2
         out.put("snow", "Block_Hit_Snow");             // 0.17s  2
         out.put("dust", "Block_Hit_Mud");              // 0.17s  2
+        // The 0.20.0 restock, all re-verified against the finite-LifeSpan scan. Disco is the
+        // one deliberate exception to "prefer few spawners" — seven of them, which is why it
+        // costs what it costs and there is exactly one of it.
+        out.put("hearts", "Hearts");                   // 3.0s   1
+        out.put("zzz", "Sleepy");                      // 5.0s   1
+        out.put("rage", "Angry");                      // 3.0s   2
+        out.put("toxic", "Status_Poisoned");           // 5.0s   3
+        out.put("rune", "Memory_Catch_Rune");          // 5.0s   2
+        out.put("disco", "Dance_Lights2");             // 2.0s   7
         return out;
+    }
+
+    // --- 0.20.0: priced gear --------------------------------------------------------------
+
+    /**
+     * Wearable design name → cost in tokens. Absent or 0 means free.
+     *
+     * <p>Only the 0.20.0 additions are listed; everything that shipped free before stays free
+     * by not being listed — pricing must never take away something players already had, the
+     * same grandfathering rule the skins follow. Unlike costumes there is no default-cost
+     * fallback here: gear only enters the catalogue through a build, so a new item's price is
+     * a deliberate line in this map, not an accident.
+     */
+    private Map<String, Integer> gearCosts = defaultGearCosts();
+
+    static Map<String, Integer> defaultGearCosts() {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        out.put("black", 100);   // the seventh cape — the first paid one
+        out.put("beanie", 100);
+        out.put("top", 150);
+        out.put("wizard", 200);
+        return out;
+    }
+
+    private void backfillGearCosts() {
+        if (gearCosts == null) {
+            gearCosts = new LinkedHashMap<>();
+        } else {
+            gearCosts = new LinkedHashMap<>(gearCosts);
+        }
+        defaultGearCosts().forEach(gearCosts::putIfAbsent);
+    }
+
+    /** Cost of a wearable in tokens. Anything not listed is free. */
+    public int gearCost(String name) {
+        if (name == null || gearCosts == null) {
+            return 0;
+        }
+        Integer cost = gearCosts.get(name.toLowerCase());
+        return cost == null ? 0 : Math.max(0, cost);
+    }
+
+    public Map<String, Integer> gearCosts() {
+        return gearCosts == null ? Map.of() : Collections.unmodifiableMap(gearCosts);
     }
 }

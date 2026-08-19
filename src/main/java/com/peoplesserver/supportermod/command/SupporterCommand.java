@@ -547,9 +547,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "    /supporter title <text>, /supporter colour <hex>");
             info(ctx, "  Particle trails — " + config.trails().size() + " to choose from");
             info(ctx, "    /supporter trail <name>, /supporter shop");
-            info(ctx, "  A supporter cape — 6 designs");
+            info(ctx, "  A supporter cape — " + CapeSub.DESIGNS.size() + " designs");
             info(ctx, "    /supporter cape");
-            info(ctx, "  Headwear — crown, cowboy hat and shades");
+            info(ctx, "  Headwear — " + String.join(", ", HatSub.HATS.keySet()));
             info(ctx, "    /supporter hat");
             info(ctx, "  Supporter trainers");
             info(ctx, "    /supporter shoes — or the panel Wardrobe tab for all of it");
@@ -618,8 +618,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "  What you get:");
             info(ctx, "    A chat tag, your own title and chat colour");
             info(ctx, "    Particle trails — " + config.trails().size() + " to choose from");
-            info(ctx, "    A supporter cape — 6 designs, /supporter cape");
-            info(ctx, "    Headwear and trainers — crown, cowboy, shades, trainers");
+            info(ctx, "    A supporter cape — " + CapeSub.DESIGNS.size() + " designs, /supporter cape");
+            info(ctx, "    Headwear and trainers — " + String.join(", ", HatSub.HATS.keySet()) + ", trainers");
             info(ctx, "    Homes: " + config.supporterHomeSlots()
                     + " instead of " + config.defaultHomeSlots());
             info(ctx, "    " + config.tokensPerMonth()
@@ -698,10 +698,13 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             DESIGNS.put("jade", "Supporter_Cape_Jade");
             DESIGNS.put("gold", "Supporter_Cape_Gold");
             DESIGNS.put("ember", "Supporter_Cape_Ember");
+            // The seventh design and the first PAID one — gearCosts prices it; the free six
+            // stay free forever (they are the advertised perk).
+            DESIGNS.put("black", "Supporter_Cape_Black");
         }
 
         public CapeSub(SupporterPlugin plugin) {
-            super("cape", "Your supporter cape: 6 designs to choose from.");
+            super("cape", "Your supporter cape: 7 designs to choose from.");
             setPermissionGroup(GameMode.Adventure);
             // "/supporter capes" reads more naturally for the list, so it is an alias — the
             // bare form of either spelling lists, and "<design>" on either delivers.
@@ -727,7 +730,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         public CapeDesignVariant(SupporterPlugin plugin) {
-            super("Get a supporter cape in one of 6 designs.");
+            super("Get a supporter cape by design name.");
             setPermissionGroup(GameMode.Adventure);
             this.plugin = plugin;
             this.designArg = withRequiredArg("design", "cape design",
@@ -750,6 +753,12 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             if (itemId == null) {
                 err(ctx, "No such design. Choose from: "
                         + String.join(", ", CapeSub.DESIGNS.keySet()));
+                return;
+            }
+            int cost = plugin.config().gearCost(design);
+            if (!service.ownsGear(player.getUuid(), design, cost)) {
+                err(ctx, "The " + design + " cape is locked — " + cost
+                        + " tokens. /supporter buy " + design + ", or the Shop tab.");
                 return;
             }
             try {
@@ -792,6 +801,10 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             HATS.put("crown", "Supporter_Crown");
             HATS.put("cowboy", "Supporter_Hat_Cowboy");
             HATS.put("shades", "Supporter_Shades");
+            // The 0.20.0 restock — all three priced via gearCosts; the original three stay free.
+            HATS.put("top", "Supporter_Hat_Top");
+            HATS.put("wizard", "Supporter_Hat_Wizard");
+            HATS.put("beanie", "Supporter_Hat_Beanie");
         }
 
         public HatSub(SupporterPlugin plugin) {
@@ -838,6 +851,12 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             String itemId = HatSub.HATS.get(name);
             if (itemId == null) {
                 err(ctx, "No such hat. Choose from: " + String.join(", ", HatSub.HATS.keySet()));
+                return;
+            }
+            int cost = plugin.config().gearCost(name);
+            if (!service.ownsGear(player.getUuid(), name, cost)) {
+                err(ctx, "The " + name + " hat is locked — " + cost
+                        + " tokens. /supporter buy " + name + ", or the Shop tab.");
                 return;
             }
             try {
@@ -1046,6 +1065,15 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                         + String.join(", ", ShoesSub.SHOES.keySet()));
                 return;
             }
+            // Unreachable today (no footwear is priced) and deliberately here anyway: a shoe
+            // priced in gearCosts tomorrow must not silently bypass the gate the capes and
+            // hats have.
+            int cost = plugin.config().gearCost(name);
+            if (!service.ownsGear(player.getUuid(), name, cost)) {
+                err(ctx, "That footwear is locked — " + cost
+                        + " tokens. /supporter buy " + name + ", or the Shop tab.");
+                return;
+            }
             try {
                 ItemStackTransaction tx = Player.giveItem(new ItemStack(itemId, 1), ref, store);
                 ItemStack remainder = tx == null ? null : tx.getRemainder();
@@ -1169,6 +1197,19 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                             com.peoplesserver.supportermod.ui.SkinChanger.isCostume(item));
                     result = service.purchaseSkin(uuid, item, cost);
                     wearHint = "/supporter skin " + item;
+                }
+                // Third catalogue: wearables. Same order every time — trails, skins, gear —
+                // so a colliding name always resolves the same way.
+                if (result == SupporterService.PurchaseResult.UNKNOWN_ITEM) {
+                    String lower = item.toLowerCase();
+                    String getHint = CapeSub.DESIGNS.containsKey(lower) ? "/supporter cape "
+                            : HatSub.HATS.containsKey(lower) ? "/supporter hat "
+                            : ShoesSub.SHOES.containsKey(lower) ? "/supporter shoes " : null;
+                    if (getHint != null) {
+                        result = service.purchaseGear(uuid, lower,
+                                plugin.config().gearCost(lower));
+                        wearHint = getHint + lower;
+                    }
                 }
                 String hint = wearHint;
                 switch (result) {

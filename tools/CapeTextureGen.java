@@ -88,6 +88,11 @@ public final class CapeTextureGen {
         new Design("jade", new Color(0x55FF55), new Color(0x2A9C4A)),
         new Design("gold", new Color(0xFFFF55), new Color(0xC9A82A)),
         new Design("ember", new Color(0xFF5555), new Color(0x9C2A2A)),
+        // Black is the seventh design and the first PAID cape — not a chat colour, and that is
+        // the point: the free six advertise your chat identity, black goes with the costumes
+        // (Zorro and Blade in particular). The standard trim/highlight math lands on a silver
+        // crown over near-black cloth, which is exactly the look.
+        new Design("black", new Color(0x46464C), new Color(0x121214)),
     };
 
     public static void main(String[] args) throws Exception {

@@ -123,6 +123,34 @@ class SupporterTokensTest {
     }
 
     @Test
+    @DisplayName("gear lives in its own namespace - a gear unlock never grants a trail or skin")
+    void gearNamespaceIsSeparate() {
+        giveTokens(300);
+
+        assertEquals(PurchaseResult.BOUGHT, service.purchaseGear(ALICE, "black", 100));
+        assertTrue(service.ownsGear(ALICE, "black", 100));
+        assertTrue(service.unlocks(ALICE).contains("gear:black"),
+                "the unlock is recorded with its namespace prefix");
+        // The same name in the other catalogues stays locked: only gear:black was written.
+        assertFalse(service.ownsSkin(ALICE, "black", 300));
+        assertFalse(service.unlocks(ALICE).contains("black"),
+                "no bare, un-namespaced unlock may be written - that is the trail namespace");
+        assertEquals(200, service.tokenBalance(ALICE));
+
+        assertEquals(PurchaseResult.ALREADY_OWNED, service.purchaseGear(ALICE, "black", 100));
+        assertEquals(200, service.tokenBalance(ALICE), "a second buy must not deduct again");
+    }
+
+    @Test
+    @DisplayName("free gear is owned by everyone and never charged")
+    void freeGearIsOwned() {
+        // Cost 0 is what every pre-0.20.0 wearable reports: absent from gearCosts entirely.
+        // Grandfathering IS this line — the crown must never need a purchase.
+        assertTrue(service.ownsGear(ALICE, "crown", 0));
+        assertEquals(PurchaseResult.FREE, service.purchaseGear(ALICE, "crown", 0));
+    }
+
+    @Test
     @DisplayName("free trails need no purchase and are owned by everyone")
     void freeTrailsAreOwned() {
         String free = config.trails().keySet().stream()

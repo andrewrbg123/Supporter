@@ -1,0 +1,27 @@
+{
+  "TranslationProperties": {
+    "Name": "Supporter Wizard Hat",
+    "Description": "A hat for the people who keep this server running. Purely cosmetic - it offers no protection whatsoever, and wearing it means wearing no helmet."
+  },
+  "Parent": "Armor_Cloth_Wool_Head",
+  "ItemLevel": 1,
+  "Icon": "Icons/ItemsGenerated/Supporter_Hat_Wizard.png",
+  "IconProperties": {
+    "Scale": 0.4,
+    "Rotation": [22.5, 47.815, 22.5],
+    "Translation": [4, -55]
+  },
+  "Model": "Items/Armor/Supporter_Hat_Wizard.blockymodel",
+  "Texture": "Items/Armor/Supporter_Hat_Wizard.png",
+  "Armor": {
+    "ArmorSlot": "Head",
+    "BaseDamageResistance": 0,
+    "CosmeticsToHide": ["EarAccessory", "Ear", "Haircut", "HeadAccessory"]
+  },
+  "Tags": {
+    "Type": ["Armor"],
+    "Family": ["Cloth_Wool"]
+  },
+  "MaxDurability": 0,
+  "ItemSoundSetId": "ISS_Armor_Cloth"
+}

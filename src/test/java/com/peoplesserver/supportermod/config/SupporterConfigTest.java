@@ -126,6 +126,67 @@ class SupporterConfigTest {
     }
 
     @Test
+    @DisplayName("every default trail has a price entry - free is a decision, not an omission")
+    void everyTrailIsPriced() {
+        // A trail added to defaultTrails without a defaultTrailCosts line would be silently
+        // free (trailCost falls back to 0). Free must be an explicit 0 in the ladder.
+        assertEquals(SupporterConfig.defaultTrails().keySet(),
+                SupporterConfig.defaultTrailCosts().keySet());
+    }
+
+    @Test
+    @DisplayName("gear prices land in a live config through the per-key backfill")
+    void gearCostsBackfillPerKey(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("supporter.json");
+        // A 0.19.x-era file: gearCosts absent entirely, trailCosts present but missing the new
+        // trails. The whole-map "if empty" guard is the bug this project documents; per key is
+        // the rule.
+        Files.writeString(file, """
+                {
+                  "trailCosts": {"sparkle": 0, "dust": 0, "snow": 150,
+                                 "gold": 200, "heal": 250, "morph": 999}
+                }
+                """, StandardCharsets.UTF_8);
+
+        SupporterConfig config = SupporterConfig.load(file);
+
+        assertEquals(100, config.gearCost("black"), "a new map arrives with its defaults");
+        assertEquals(200, config.gearCost("wizard"));
+        assertEquals(0, config.gearCost("crown"), "unlisted gear is free");
+        assertEquals(0, config.gearCost(null));
+        assertEquals(999, config.trailCost("morph"), "the admin's own price must survive");
+        assertEquals(400, config.trailCost("disco"),
+                "a trail this build added must be priced in a live config too");
+        assertTrue(config.trails().containsKey("disco"),
+                "and the trail itself must exist there");
+    }
+
+    @Test
+    @DisplayName("every priced gear name is a real catalogue entry in the command source")
+    void gearPricesMatchTheCatalogue() throws IOException {
+        // The catalogues live in SupporterCommand (which needs the server jar, absent from the
+        // test classpath), so this reads the source the same way ManifestTest reads the
+        // manifest. A typo'd key in defaultGearCosts would price nothing, silently - the item
+        // it meant to gate would stay free.
+        String src = Files.readString(Path.of("src", "main", "java", "com", "peoplesserver",
+                "supportermod", "command", "SupporterCommand.java"), StandardCharsets.UTF_8);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:DESIGNS|HATS|SHOES)\\.put\\(\"([a-z]+)\"").matcher(src);
+        List<String> names = new ArrayList<>();
+        while (m.find()) {
+            names.add(m.group(1));
+        }
+        assertFalse(names.isEmpty(), "catalogue scan found nothing - the pattern went stale");
+        assertEquals(names.size(), names.stream().distinct().count(),
+                "design names must be unique across capes, hats and shoes - they share the "
+                        + "gear: unlock namespace: " + names);
+        for (String priced : SupporterConfig.defaultGearCosts().keySet()) {
+            assertTrue(names.contains(priced),
+                    "priced gear '" + priced + "' is not in any catalogue - it would gate nothing");
+        }
+    }
+
+    @Test
     @DisplayName("a store link alone is enough to show players where to go")
     void urlWithoutPricesStillCounts(@TempDir Path dir) throws IOException {
         // Half-configured is a normal state — an admin who does not want to maintain prices in

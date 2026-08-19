@@ -1,0 +1,110 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Head",
+      "position": {"x": 0, "y": 0, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {
+        "type": "none",
+        "offset": {"x": 0, "y": 0, "z": 0},
+        "stretch": {"x": 0, "y": 0, "z": 0},
+        "settings": {
+          "isPiece": true
+        },
+        "textureLayout": {},
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "flat"
+      },
+      "children": [
+        {
+          "id": "2",
+          "name": "Band",
+          "position": {"x": 0, "y": 2, "z": 0.55},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 38, "y": 5, "z": 37}
+            },
+            "textureLayout": {
+              "front":  {"offset": {"x": 39, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "back":   {"offset": {"x": 39, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "left":   {"offset": {"x": 39, "y": 8},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "right":  {"offset": {"x": 39, "y": 8},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "top":    {"offset": {"x": 39, "y": 14}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "bottom": {"offset": {"x": 39, "y": 14}, "mirror": {"x": false, "y": false}, "angle": 0}
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "flat"
+          },
+          "children": []
+        },
+        {
+          "id": "3",
+          "name": "Shell",
+          "position": {"x": 0, "y": 4, "z": 0.55},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 36, "y": 12, "z": 35}
+            },
+            "textureLayout": {
+              "front":  {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "back":   {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "left":   {"offset": {"x": 1, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "right":  {"offset": {"x": 1, "y": 15}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "top":    {"offset": {"x": 1, "y": 29}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "bottom": {"offset": {"x": 1, "y": 29}, "mirror": {"x": false, "y": false}, "angle": 0}
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "flat"
+          },
+          "children": [
+            {
+              "id": "4",
+              "name": "Bobble",
+              "position": {"x": 0, "y": 12, "z": 0},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 10, "y": 6, "z": 10}
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 1, "y": 66},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 1, "y": 66},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 13, "y": 66}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 13, "y": 66}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 1, "y": 74},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 1, "y": 74},  "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

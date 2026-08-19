@@ -553,6 +553,56 @@ public final class SupporterService {
         }
     }
 
+    /**
+     * Buys a wearable unlock — a cape design, a hat. Third user of the trail machinery, third
+     * namespace: {@code gear:<name>}, because wearable design names live in their own catalogue
+     * and must never collide with a trail or a skin unlock ("gold" is already two of the
+     * three). Cost comes from the caller for the same layering reason as skins — the gear
+     * catalogue lives in the command layer.
+     */
+    public synchronized PurchaseResult purchaseGear(UUID uuid, String gearName, int cost) {
+        Objects.requireNonNull(uuid, "uuid");
+        if (gearName == null || gearName.isBlank()) {
+            return PurchaseResult.UNKNOWN_ITEM;
+        }
+        if (cost <= 0) {
+            return PurchaseResult.FREE;
+        }
+        String unlockId = "gear:" + gearName.toLowerCase();
+        try {
+            return storage.transact(() -> {
+                if (storage.ownsUnlock(uuid, unlockId)) {
+                    return PurchaseResult.ALREADY_OWNED;
+                }
+                int balance = Math.max(0, tokensEarned(uuid) - storage.totalSpent(uuid));
+                if (balance < cost) {
+                    return PurchaseResult.NOT_ENOUGH_TOKENS;
+                }
+                long now = clock.millis();
+                if (!storage.addUnlock(uuid, unlockId, cost, now)) {
+                    return PurchaseResult.ALREADY_OWNED; // lost a race; nothing charged
+                }
+                storage.log(uuid, directory.usernameFor(uuid).orElse(null),
+                        "PURCHASE", unlockId + " for " + cost + " tokens", "player", now);
+                return PurchaseResult.BOUGHT;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Failed to purchase gear " + gearName, e);
+        }
+    }
+
+    /** Whether this player may have a wearable that costs {@code cost}. Free means yes. */
+    public boolean ownsGear(UUID uuid, String gearName, int cost) {
+        if (cost <= 0) {
+            return true;
+        }
+        try {
+            return storage.ownsUnlock(uuid, "gear:" + gearName.toLowerCase());
+        } catch (SQLException e) {
+            throw new StorageException("Failed to check gear unlock " + gearName, e);
+        }
+    }
+
     /** Whether this player may wear a skin that costs {@code cost}. Free means yes. */
     public boolean ownsSkin(UUID uuid, String skinName, int cost) {
         if (cost <= 0) {

@@ -84,10 +84,10 @@ public final class SupporterPanel {
     private static final int BUY_HEIGHT = 32;
 
     /**
-     * The Shop's skin grid uses wider buttons than everything else: the labels carry a price
-     * suffix ("jack-sparrow · 300" is 18 characters) and the shrink-to-fit label style renders
-     * those at half size inside a 120-wide button. 200 fits the longest label at full size;
-     * four per row keeps the grid inside the 912 content width.
+     * The Shop grids (trails, gear, skins) use wider buttons than everything else: the labels
+     * carry a price suffix ("jack-sparrow · 300" is 18 characters) and the shrink-to-fit label
+     * style renders those at half size inside a 120-wide button. 200 fits the longest label at
+     * full size; four per row keeps a grid inside the 912 content width.
      */
     private static final int SKIN_BUY_WIDTH = 200;
     private static final int SKIN_COLS = 4;
@@ -276,17 +276,26 @@ public final class SupporterPanel {
      */
     private String unlocksText(SupporterService service, UUID uuid) {
         List<String> unlocks = service.unlocks(uuid);
-        // Skin unlocks share the table under a "skin:" namespace (names collide with trails),
-        // so split them out for display rather than showing the raw prefixed ids.
-        List<String> trails = unlocks.stream().filter(u -> !u.startsWith("skin:")).toList();
+        // Skin and gear unlocks share the table under "skin:"/"gear:" namespaces (names collide
+        // with trails), so split them out for display rather than showing the raw prefixed ids.
+        List<String> trails = unlocks.stream()
+                .filter(u -> !u.startsWith("skin:") && !u.startsWith("gear:")).toList();
         List<String> skins = unlocks.stream().filter(u -> u.startsWith("skin:"))
                 .map(u -> u.substring(5)).toList();
-        if (trails.isEmpty() && skins.isEmpty()) {
-            return "Nothing bought yet - the free trails and skins are yours already";
+        List<String> gear = unlocks.stream().filter(u -> u.startsWith("gear:"))
+                .map(u -> u.substring(5)).toList();
+        if (trails.isEmpty() && skins.isEmpty() && gear.isEmpty()) {
+            return "Nothing bought yet - the free trails, gear and skins are yours already";
         }
         StringBuilder out = new StringBuilder();
         if (!trails.isEmpty()) {
             out.append("Trails bought: ").append(String.join(", ", trails));
+        }
+        if (!gear.isEmpty()) {
+            if (out.length() > 0) {
+                out.append("   ");
+            }
+            out.append("Gear bought: ").append(String.join(", ", gear));
         }
         if (!skins.isEmpty()) {
             if (out.length() > 0) {
@@ -308,9 +317,11 @@ public final class SupporterPanel {
                 "Particle trails - " + config.trails().size() + " to choose from",
                 theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkCape",
-                "A supporter cape - 6 designs, /supporter cape", theme.body(), row++));
+                "A supporter cape - " + SupporterCommand.CapeSub.DESIGNS.size()
+                        + " designs, /supporter cape", theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkHat",
-                "Headwear - crown, cowboy, shades - and trainers: the Wardrobe tab",
+                "Headwear - " + SupporterCommand.HatSub.HATS.size()
+                        + " to choose from - and trainers: the Wardrobe tab",
                 theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkHomes",
                 "Homes: " + config.supporterHomeSlots()
@@ -357,26 +368,54 @@ public final class SupporterPanel {
             return tab;
         }
 
-        // Cheapest first, so the free ones lead and the ladder reads as a ladder. Sorted rather
-        // than map order because the config is a plain JSON object and its iteration order is
-        // whatever the admin's file happens to say.
+        // v0.20.0: the shop is three grids of what is FOR SALE — priced and unowned only.
+        // Twelve trails stopped fitting as text rows, and 0.19.2 had already decided the
+        // philosophy: the Shop is what you could buy; what you own lives on the Trails and
+        // Wardrobe tabs. Every priced item gets a button, hidden once owned (the standing
+        // editById rule), visible regardless of balance (the 0.19.1 rule — the grid IS the
+        // listing, and clicking one you cannot afford says so in the notice line).
+        tab = (TabContentBuilder) tab.addChild(line("ShopTrailsHead",
+                "Trails — wear them from the Trails tab", theme.heading(), row++));
         List<String> ids = new ArrayList<>(config.trails().keySet());
         ids.sort(Comparator.comparingInt(config::trailCost).thenComparing(id -> id));
-
+        int index = 0;
         for (String id : ids) {
-            tab = (TabContentBuilder) tab.addChild(
-                    line(rowId(id), rowText(service, uuid, id), rowStyle(service, uuid, id), row));
-            if (buyable(service, uuid, id)) {
-                tab = (TabContentBuilder) tab.addChild(buyButton(service, uuid, id, world, row));
+            int cost = config.trailCost(id);
+            if (cost <= 0) {
+                continue; // free trails are not shop items; the Trails tab has them
             }
-            row++;
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    buyId(id), id + " · " + cost, theme.buttonLabel(),
+                    (index % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
+                    (row + (index / SKIN_COLS)) * ROW_HEIGHT - 4,
+                    SKIN_BUY_WIDTH,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                            buy(service, uuid, id, world, ctx))
+                    .withVisible(!service.unlocks(uuid).contains(id)));
+            index++;
         }
+        row += Math.max(1, (index + SKIN_COLS - 1) / SKIN_COLS);
 
-        // v0.19.0: priced skins, as a button grid rather than rows — ten of them would not fit
-        // as rows beside the trails. Only priced ones appear; free skins are not shop items.
-        // Buttons exist for every priced skin and visibility tracks owned/affordable, the same
-        // editById rule as everything else here.
-        row++;
+        tab = (TabContentBuilder) tab.addChild(line("ShopGearHead",
+                "Gear — capes and hats; the Wardrobe tab delivers them", theme.heading(), row++));
+        index = 0;
+        for (String name : gearNames()) {
+            int cost = config.gearCost(name);
+            if (cost <= 0) {
+                continue;
+            }
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    gearBuyId(name), name + " · " + cost, theme.buttonLabel(),
+                    (index % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
+                    (row + (index / SKIN_COLS)) * ROW_HEIGHT - 4,
+                    SKIN_BUY_WIDTH,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                            buyGear(service, uuid, name, cost, world, ctx))
+                    .withVisible(!service.ownsGear(uuid, name, cost)));
+            index++;
+        }
+        row += Math.max(1, (index + SKIN_COLS - 1) / SKIN_COLS);
+
         tab = (TabContentBuilder) tab.addChild(line("ShopSkinsHead",
                 "Skins — tints and costumes; wear them from the Wardrobe tab",
                 theme.heading(), row++));
@@ -397,6 +436,47 @@ public final class SupporterPanel {
             skinIndex++;
         }
         return tab;
+    }
+
+    /**
+     * Every wearable design name, all three catalogues — the command maps stay the single
+     * source of truth, so gear added to a command shows up here without panel changes.
+     */
+    private static List<String> gearNames() {
+        List<String> out = new ArrayList<>();
+        out.addAll(SupporterCommand.CapeSub.DESIGNS.keySet());
+        out.addAll(SupporterCommand.HatSub.HATS.keySet());
+        out.addAll(SupporterCommand.ShoesSub.SHOES.keySet());
+        return out;
+    }
+
+    private static String gearBuyId(String name) {
+        return "GearBuy_" + name;
+    }
+
+    private void buyGear(SupporterService service, UUID uuid, String name, int cost,
+                         World world, au.ellie.hyui.events.UIContext ctx) {
+        String note;
+        try {
+            note = switch (service.purchaseGear(uuid, name, cost)) {
+                case BOUGHT -> "Unlocked " + name + " — the Wardrobe tab delivers it";
+                case ALREADY_OWNED -> "You already own " + name;
+                case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + name;
+                case FREE -> name + " is free — the Wardrobe tab has it";
+                case UNKNOWN_ITEM -> "That item no longer exists";
+            };
+        } catch (RuntimeException e) {
+            plugin.log().error("Gear purchase failed for " + uuid + " (" + name + ")", e);
+            note = "Purchase failed — try /supporter buy " + name;
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                refreshAfterPurchase(service, uuid, ctx, message);
+            } catch (Throwable t) {
+                plugin.log().warn("Gear purchase refresh failed: " + t);
+            }
+        });
     }
 
     private static String skinBuyId(String skinName) {
@@ -442,42 +522,6 @@ public final class SupporterPanel {
                 plugin.log().warn("Skin purchase refresh failed: " + t);
             }
         });
-    }
-
-    /**
-     * Whether a row gets a Buy button element at all.
-     *
-     * <p>Free and already-owned trails never get one, and nothing can change that while the panel
-     * is open, so the element is simply never built. Everything else gets a button whose
-     * <em>visibility</em> is then driven by {@link #canAfford} — the element has to exist up front
-     * because {@code editById} can only edit something that was built, so a button that might
-     * become affordable later must be present and hidden rather than absent.
-     */
-    private boolean buyable(SupporterService service, UUID uuid, String id) {
-        return plugin.config().trailCost(id) > 0 && !service.unlocks(uuid).contains(id);
-    }
-
-    /** Whether that button is shown. A button you cannot use is noise — the row states why. */
-    private boolean canAfford(SupporterService service, UUID uuid, String id) {
-        return buyable(service, uuid, id)
-                && service.tokenBalance(uuid) >= plugin.config().trailCost(id);
-    }
-
-    private CustomButtonBuilder buyButton(SupporterService service, UUID uuid, String trailId,
-                                          World world, int row) {
-        CustomButtonBuilder button = (CustomButtonBuilder) CustomButtonBuilder.customTextButton()
-                .withId("SupBuy_" + trailId)
-                .withAnchor(new HyUIAnchor()
-                        .setTop(row * ROW_HEIGHT - 4)
-                        .setLeft(WIDTH - (PAD * 2) - BUY_WIDTH)
-                        .setWidth(BUY_WIDTH).setHeight(BUY_HEIGHT));
-        button = button.withText("Buy")
-                .withVisible(canAfford(service, uuid, trailId))
-                .withDefaultBackground(theme.tabBackground())
-                .withHoveredBackground(theme.tabHovered())
-                .withPressedBackground(theme.tabPressed());
-        return button.addEventListener(CustomUIEventBindingType.Activating,
-                (Void v, au.ellie.hyui.events.UIContext ctx) -> buy(service, uuid, trailId, world, ctx));
     }
 
     private static String buyId(String trailId) {
@@ -534,16 +578,23 @@ public final class SupporterPanel {
                 label -> label.withText(balanceText(service, uuid)));
         ctx.editById(STATUS_UNLOCKS_ID, LabelBuilder.class,
                 label -> label.withText(unlocksText(service, uuid)));
+        // Shop trail buttons hide once owned — the grid lists only what is still for sale.
         for (String id : plugin.config().trails().keySet()) {
-            ctx.editById(rowId(id), LabelBuilder.class,
-                    label -> label.withText(rowText(service, uuid, id))
-                            .withStyle(rowStyle(service, uuid, id)));
-            ctx.editById(buyId(id), CustomButtonBuilder.class,
-                    button -> button.withVisible(canAfford(service, uuid, id)));
+            if (plugin.config().trailCost(id) > 0) {
+                ctx.editById(buyId(id), CustomButtonBuilder.class,
+                        button -> button.withVisible(!service.unlocks(uuid).contains(id)));
+            }
         }
         // A purchase changes trail wearability too — the Trails tab must reveal the new Wear
         // button without the panel being reopened. Same lesson as the Status tab, one tab over.
         refreshTrails(service, uuid, ctx);
+        // Gear, both places at once: the Shop button disappears, the Wardrobe button appears.
+        refreshGearButtons(service, uuid, ctx,
+                SupporterCommand.CapeSub.DESIGNS.keySet(), "WdCape_");
+        refreshGearButtons(service, uuid, ctx,
+                SupporterCommand.HatSub.HATS.keySet(), "WdHat_");
+        refreshGearButtons(service, uuid, ctx,
+                SupporterCommand.ShoesSub.SHOES.keySet(), "WdShoe_");
         // A purchase changes which skin buttons show in BOTH places: the Shop button
         // disappears, the Wardrobe button appears.
         for (String skinName : SkinChanger.allNames()) {
@@ -559,36 +610,23 @@ public final class SupporterPanel {
         ctx.updatePage(false);
     }
 
-    private static String rowId(String trailId) {
-        return "SupTrail_" + trailId;
+    private void refreshGearButtons(SupporterService service, UUID uuid,
+                                    au.ellie.hyui.events.UIContext ctx,
+                                    java.util.Set<String> names, String wardrobePrefix) {
+        for (String name : names) {
+            int cost = plugin.config().gearCost(name);
+            if (cost > 0) {
+                ctx.editById(gearBuyId(name), CustomButtonBuilder.class,
+                        b -> b.withVisible(!service.ownsGear(uuid, name, cost)));
+            }
+            ctx.editById(wardrobePrefix + name, CustomButtonBuilder.class,
+                    b -> b.withVisible(service.ownsGear(uuid, name,
+                            plugin.config().gearCost(name))));
+        }
     }
 
     private String balanceText(SupporterService service, UUID uuid) {
         return service.tokenBalance(uuid) + " token(s) to spend";
-    }
-
-    private String rowText(SupporterService service, UUID uuid, String trailId) {
-        int cost = plugin.config().trailCost(trailId);
-        if (cost <= 0) {
-            return trailId + " - free";
-        }
-        if (service.unlocks(uuid).contains(trailId)) {
-            return trailId + " - owned";
-        }
-        int short_ = cost - service.tokenBalance(uuid);
-        return short_ > 0
-                ? trailId + " - " + cost + " tokens (need " + short_ + " more)"
-                : trailId + " - " + cost + " tokens";
-    }
-
-    private HyUIStyle rowStyle(SupporterService service, UUID uuid, String trailId) {
-        int cost = plugin.config().trailCost(trailId);
-        if (cost <= 0 || service.unlocks(uuid).contains(trailId)) {
-            return theme.coloured(SupporterTheme.INK_GOOD, false);
-        }
-        return service.tokenBalance(uuid) >= cost
-                ? theme.body()
-                : theme.coloured(SupporterTheme.INK_LOCKED, false);
     }
 
     // --- trails tab -----------------------------------------------------------------------
@@ -633,19 +671,25 @@ public final class SupporterPanel {
             return tab;
         }
 
+        // v0.20.0: a grid of what you can WEAR, not a listing of everything — twelve trails
+        // stopped fitting as rows, and the Shop grid now carries the locked-with-price story.
+        // Same split as the Wardrobe: this tab is what you own, the Shop is what you could.
+        // Buttons are built for every trail and hidden while locked, so buying one in the Shop
+        // reveals it here in the same click.
+        tab = (TabContentBuilder) tab.addChild(line("TrOwnedHead",
+                "Your trails — the locked ones are in the Shop tab", theme.heading(), row++));
         List<String> ids = new ArrayList<>(plugin.config().trails().keySet());
         ids.sort(Comparator.comparingInt(plugin.config()::trailCost).thenComparing(id -> id));
+        int index = 0;
         for (String id : ids) {
             tab = (TabContentBuilder) tab.addChild(
-                    line(trailRowId(id), trailRowText(service, uuid, id),
-                            trailRowStyle(service, uuid, id), row));
-            tab = (TabContentBuilder) tab.addChild(
-                    smallButton(trailWearId(id), "Wear",
-                            WIDTH - (PAD * 2) - BUY_WIDTH, row * ROW_HEIGHT - 4,
+                    wearButton(trailWearId(id), id, theme.buttonLabel(),
+                            (index % 6) * (BUY_WIDTH + 8),
+                            (row + (index / 6)) * ROW_HEIGHT - 4,
                             (Void v, au.ellie.hyui.events.UIContext ctx) ->
                                     wearTrail(service, uuid, id, world, ctx))
                             .withVisible(wearable(service, uuid, id)));
-            row++;
+            index++;
         }
         return tab;
     }
@@ -712,15 +756,12 @@ public final class SupporterPanel {
         });
     }
 
-    /** Rewrites the trails tab: the wearing header and every row's marker and button. */
+    /** Rewrites the trails tab: the wearing header and every wear button's visibility. */
     private void refreshTrails(SupporterService service, UUID uuid,
                                au.ellie.hyui.events.UIContext ctx) {
         ctx.editById(TRAIL_CURRENT_ID, LabelBuilder.class,
                 label -> label.withText(trailCurrentText(service, uuid)));
         for (String id : plugin.config().trails().keySet()) {
-            ctx.editById(trailRowId(id), LabelBuilder.class,
-                    label -> label.withText(trailRowText(service, uuid, id))
-                            .withStyle(trailRowStyle(service, uuid, id)));
             ctx.editById(trailWearId(id), CustomButtonBuilder.class,
                     button -> button.withVisible(wearable(service, uuid, id)));
         }
@@ -733,27 +774,6 @@ public final class SupporterPanel {
     private String trailCurrentText(SupporterService service, UUID uuid) {
         String worn = service.identity(uuid).trail();
         return worn == null ? "No trail on" : "Wearing: " + worn;
-    }
-
-    private String trailRowText(SupporterService service, UUID uuid, String id) {
-        int cost = plugin.config().trailCost(id);
-        String state = cost <= 0 ? "free"
-                : service.unlocks(uuid).contains(id) ? "owned"
-                : "locked - " + cost + " tokens in the Shop tab";
-        String wearing = id.equals(service.identity(uuid).trail()) ? "  (wearing)" : "";
-        return id + " - " + state + wearing;
-    }
-
-    private HyUIStyle trailRowStyle(SupporterService service, UUID uuid, String id) {
-        if (id.equals(service.identity(uuid).trail())) {
-            return theme.coloured(SupporterTheme.INK_GOOD, true);
-        }
-        return wearable(service, uuid, id) ? theme.body()
-                : theme.coloured(SupporterTheme.INK_LOCKED, false);
-    }
-
-    private static String trailRowId(String id) {
-        return "TrRow_" + id;
     }
 
     private static String trailWearId(String id) {
@@ -971,6 +991,9 @@ public final class SupporterPanel {
             return tab;
         }
 
+        // Priced gear follows the 0.19.2 skin rule: the Wardrobe shows only what you own,
+        // built-and-hidden while locked so a Shop purchase reveals the button in-place. Free
+        // gear is owned by everyone, so those buttons are always visible.
         tab = (TabContentBuilder) tab.addChild(line("WdCapes",
                 "Capes — one chest item at a time", theme.heading(), row++));
         int index = 0;
@@ -981,8 +1004,11 @@ public final class SupporterPanel {
                     "WdCape_" + cape.getKey(), cape.getKey(), theme.swatchLabel(hex),
                     index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> giveWearable(
-                            service, uuid, playerRef, "Cape (" + cape.getKey() + ")",
-                            cape.getValue(), world, ctx)));
+                            service, uuid, playerRef, cape.getKey(),
+                            "Cape (" + cape.getKey() + ")",
+                            cape.getValue(), world, ctx))
+                    .withVisible(service.ownsGear(uuid, cape.getKey(),
+                            plugin.config().gearCost(cape.getKey()))));
             index++;
         }
         row += 2;
@@ -995,8 +1021,11 @@ public final class SupporterPanel {
                     "WdHat_" + hat.getKey(), hat.getKey(), theme.buttonLabel(),
                     index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> giveWearable(
-                            service, uuid, playerRef, "Headwear (" + hat.getKey() + ")",
-                            hat.getValue(), world, ctx)));
+                            service, uuid, playerRef, hat.getKey(),
+                            "Headwear (" + hat.getKey() + ")",
+                            hat.getValue(), world, ctx))
+                    .withVisible(service.ownsGear(uuid, hat.getKey(),
+                            plugin.config().gearCost(hat.getKey()))));
             index++;
         }
         row += 2;
@@ -1010,8 +1039,11 @@ public final class SupporterPanel {
                     "WdShoe_" + shoe.getKey(), shoe.getKey(), theme.buttonLabel(),
                     index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> giveWearable(
-                            service, uuid, playerRef, "Footwear (" + shoe.getKey() + ")",
-                            shoe.getValue(), world, ctx)));
+                            service, uuid, playerRef, shoe.getKey(),
+                            "Footwear (" + shoe.getKey() + ")",
+                            shoe.getValue(), world, ctx))
+                    .withVisible(service.ownsGear(uuid, shoe.getKey(),
+                            plugin.config().gearCost(shoe.getKey()))));
             index++;
         }
         row += 2;
@@ -1127,13 +1159,18 @@ public final class SupporterPanel {
     }
 
     private void giveWearable(SupporterService service, UUID uuid, PlayerRef playerRef,
-                              String label, String itemId, World world,
+                              String gearName, String label, String itemId, World world,
                               au.ellie.hyui.events.UIContext ctx) {
         world.execute(() -> {
             String note;
             try {
+                int cost = plugin.config().gearCost(gearName);
                 if (!service.isSupporter(uuid)) {
                     note = "The wardrobe is a supporter perk — see the About tab.";
+                } else if (!service.ownsGear(uuid, gearName, cost)) {
+                    // Belt and braces: the button is hidden while locked, but a stale panel
+                    // must not hand out an unpaid unlock.
+                    note = gearName + " is locked — " + cost + " tokens in the Shop tab.";
                 } else {
                     Ref<EntityStore> ref = playerRef.getReference();
                     if (ref == null || ref.getStore() == null) {
