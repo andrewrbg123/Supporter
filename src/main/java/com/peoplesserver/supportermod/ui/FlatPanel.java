@@ -770,13 +770,14 @@ public final class FlatPanel {
         y += HEAD_H;
         int i = 0;
         for (java.util.Map.Entry<String, String> e
-                : ownedFirst(SupporterCommand.CapeSub.DESIGNS,
-                        n -> service.ownsGear(uuid, n, plugin.config().gearCost(n)))) {
+                : SupporterCommand.CapeSub.DESIGNS.entrySet()) {
             String name = e.getKey();
             String item = e.getValue();
-            boolean owned = service.ownsGear(uuid, name, plugin.config().gearCost(name));
+            if (!service.ownsGear(uuid, name, plugin.config().gearCost(name))) {
+                continue;
+            }
             tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdCape_" + name, name, i, y,
-                    CAPE_COLOURS.getOrDefault(name, FlatTheme.INK_BODY), owned,
+                    CAPE_COLOURS.getOrDefault(name, FlatTheme.INK_BODY),
                     (Void v, UIContext ctx) -> giveWearable(service, uuid, playerRef, name,
                             "Cape (" + name + ")", item, world, ctx)));
             i++;
@@ -787,14 +788,14 @@ public final class FlatPanel {
                 sectionHead("FlatWdHHats", "HEADWEAR", "one head item at a time", y));
         y += HEAD_H;
         i = 0;
-        for (java.util.Map.Entry<String, String> e
-                : ownedFirst(SupporterCommand.HatSub.HATS,
-                        n -> service.ownsGear(uuid, n, plugin.config().gearCost(n)))) {
+        for (java.util.Map.Entry<String, String> e : SupporterCommand.HatSub.HATS.entrySet()) {
             String name = e.getKey();
             String item = e.getValue();
-            boolean owned = service.ownsGear(uuid, name, plugin.config().gearCost(name));
+            if (!service.ownsGear(uuid, name, plugin.config().gearCost(name))) {
+                continue;
+            }
             tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdHat_" + name, name, i, y,
-                    FlatTheme.INK_BODY, owned,
+                    FlatTheme.INK_BODY,
                     (Void v, UIContext ctx) -> giveWearable(service, uuid, playerRef, name,
                             "Headwear (" + name + ")", item, world, ctx)));
             i++;
@@ -809,9 +810,11 @@ public final class FlatPanel {
                 : SupporterCommand.ShoesSub.SHOES.entrySet()) {
             String name = e.getKey();
             String item = e.getValue();
-            boolean owned = service.ownsGear(uuid, name, plugin.config().gearCost(name));
+            if (!service.ownsGear(uuid, name, plugin.config().gearCost(name))) {
+                continue;
+            }
             tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdShoe_" + name, name, i, y,
-                    FlatTheme.INK_BODY, owned,
+                    FlatTheme.INK_BODY,
                     (Void v, UIContext ctx) -> giveWearable(service, uuid, playerRef, name,
                             "Footwear (" + name + ")", item, world, ctx)));
             i++;
@@ -822,17 +825,16 @@ public final class FlatPanel {
                 "one follower at a time; they cannot fight", y));
         y += HEAD_H;
         tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdPetOff", "no pet", 0, y,
-                FlatTheme.INK_BODY, true,
+                FlatTheme.INK_BODY,
                 (Void v, UIContext ctx) -> wearPet(service, uuid, playerRef, null, world, ctx)));
         i = 1;
-        for (java.util.Map.Entry<String, String> e
-                : ownedFirst(SupporterCommand.PetSub.PETS,
-                        n -> service.ownsPet(uuid, n, plugin.config().petCost(n)))) {
-            String name = e.getKey();
-            boolean owned = service.ownsPet(uuid, name, plugin.config().petCost(name));
+        for (String name : SupporterCommand.PetSub.PETS.keySet()) {
+            if (!service.ownsPet(uuid, name, plugin.config().petCost(name))) {
+                continue;
+            }
             boolean worn = name.equals(identity.pet());
             tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdPet_" + name, name, i, y,
-                    worn ? theme.accentBright() : FlatTheme.INK_BODY, owned,
+                    worn ? theme.accentBright() : FlatTheme.INK_BODY,
                     (Void v, UIContext ctx) ->
                             wearPet(service, uuid, playerRef, name, world, ctx)));
             i++;
@@ -843,25 +845,16 @@ public final class FlatPanel {
                 "statue mode; stays on across relogs", y));
         y += HEAD_H;
         tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdSkinOff", "off", 0, y,
-                FlatTheme.INK_BODY, true,
+                FlatTheme.INK_BODY,
                 (Void v, UIContext ctx) -> setSkin(service, uuid, playerRef, null, world, ctx)));
         i = 1;
-        List<String> skinRack = new ArrayList<>();
-        for (String name : SkinChanger.allNames()) {
-            if (service.ownsSkin(uuid, name, skinCost(name))) {
-                skinRack.add(name);
-            }
-        }
         for (String name : SkinChanger.allNames()) {
             if (!service.ownsSkin(uuid, name, skinCost(name))) {
-                skinRack.add(name);
+                continue;
             }
-        }
-        for (String name : skinRack) {
-            boolean owned = service.ownsSkin(uuid, name, skinCost(name));
             boolean worn = name.equalsIgnoreCase(identity.skin());
             tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdSkin_" + name, name, i, y,
-                    worn ? theme.accentBright() : FlatTheme.INK_BODY, owned,
+                    worn ? theme.accentBright() : FlatTheme.INK_BODY,
                     (Void v, UIContext ctx) ->
                             setSkin(service, uuid, playerRef, name, world, ctx)));
             i++;
@@ -869,15 +862,23 @@ public final class FlatPanel {
         return tab;
     }
 
-    /** Wardrobe chips run seven per row; names here carry no price suffix. */
+    /**
+     * Wardrobe chips run seven per row; names here carry no price suffix.
+     *
+     * <p><b>Locked items are not built at all</b>, rather than built and hidden. The Wardrobe
+     * has meant "what you own" since 0.19.2, and the built-and-hidden trick existed only so a
+     * Shop purchase could reveal a chip without reopening the panel — which this panel does not
+     * do anyway, by the deliberate choice in {@link #finish}. Keeping the hidden chips reserved
+     * their grid rows, which is what left the Pets and Body Skins sections with a hole where
+     * two invisible rows used to be.
+     */
     private CustomButtonBuilder wardrobeChip(String id, String name, int index, int y,
-                                             String textColour, boolean owned,
+                                             String textColour,
                                              BiConsumer<Void, UIContext> onClick) {
         int w = (BODY_W - 60) / 7;
         int x = PAD + ((index % 7) * (w + 10));
         int top = y + ((index / 7) * CHIP_ROW);
-        return chip(id, name, x, top, w, textColour, FlatTheme.CHIP_BG, onClick)
-                .withVisible(owned);
+        return chip(id, name, x, top, w, textColour, FlatTheme.CHIP_BG, onClick);
     }
 
     private static int rows7(int count) {
@@ -914,18 +915,21 @@ public final class FlatPanel {
                     theme.body(FlatTheme.INK_SECONDARY), y, PAD, BODY_W, 30));
             return tab;
         }
+        // Cards share the width evenly and WRAP: priceLines is free text an admin writes, so a
+        // fixed 260px card silently truncated the token line to "...earns 100...". Nothing in
+        // this panel may quietly eat an admin's own copy.
+        int cardW = (BODY_W - ((lines.size() - 1) * 14)) / Math.max(1, lines.size());
         for (int i = 0; i < lines.size(); i++) {
-            int x = PAD + (i * 274);
+            int x = PAD + (i * (cardW + 14));
             tab = (GroupBuilder) tab.addChild(box("FlatAbCard" + i,
-                    i == 0 ? FlatTheme.CARD_BG : theme.accentWash(), x, y, 260, 76));
-            tab = (GroupBuilder) tab.addChild(hairlineBox("FlatAbCardE" + i, x, y, 260, 76));
+                    i == 1 ? theme.accentWash() : FlatTheme.CARD_BG, x, y, cardW, 76));
+            tab = (GroupBuilder) tab.addChild(hairlineBox("FlatAbCardE" + i, x, y, cardW, 76));
             tab = (GroupBuilder) tab.addChild(text("FlatAbCardT" + i, lines.get(i),
-                    theme.small(FlatTheme.INK_PRIMARY), y + 28, x + 20, 220, 24));
+                    theme.body(FlatTheme.INK_PRIMARY), y + 18, x + 18, cardW - 36, 48));
         }
         y += 96;
-        tab = (GroupBuilder) tab.addChild(text("FlatAbTokens",
-                "Every 30 days of support earns " + config.tokensPerMonth() + " shop tokens.",
-                theme.small(FlatTheme.INK_SECONDARY), y, PAD, BODY_W, 24));
+        // No hardcoded token line here: priceLines is the admin's to write, and this panel
+        // printed its own copy of the same sentence directly under theirs.
         tab = (GroupBuilder) tab.addChild(text("FlatAbWhere",
                 config.storeUrl().isEmpty()
                         ? "Where: ask an admin - the store is not open yet."
@@ -1308,23 +1312,6 @@ public final class FlatPanel {
         out.addAll(SupporterCommand.CapeSub.DESIGNS.keySet());
         out.addAll(SupporterCommand.HatSub.HATS.keySet());
         out.addAll(SupporterCommand.ShoesSub.SHOES.keySet());
-        return out;
-    }
-
-    private static List<java.util.Map.Entry<String, String>> ownedFirst(
-            java.util.Map<String, String> catalogue,
-            java.util.function.Predicate<String> owned) {
-        List<java.util.Map.Entry<String, String>> out = new ArrayList<>();
-        for (java.util.Map.Entry<String, String> e : catalogue.entrySet()) {
-            if (owned.test(e.getKey())) {
-                out.add(e);
-            }
-        }
-        for (java.util.Map.Entry<String, String> e : catalogue.entrySet()) {
-            if (!owned.test(e.getKey())) {
-                out.add(e);
-            }
-        }
         return out;
     }
 
