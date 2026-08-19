@@ -177,6 +177,14 @@ final class Migrations {
                     PRIMARY KEY (uuid, quest_key)
                 )
                 """
+            },
+            // --- V7: v0.21.4 "top" renamed to "top-hat" -----------------------------------
+            new String[] {
+                // A design rename moves the unlocks with it, or the rename silently takes
+                // away something people paid 150 tokens for. The item id never changed —
+                // only the catalogue name players type and buy under.
+                "UPDATE supporter_unlocks SET item_id = 'gear:top-hat'"
+                        + " WHERE item_id = 'gear:top'"
             });
 
     static void apply(Connection conn) throws SQLException {

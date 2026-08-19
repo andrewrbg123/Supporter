@@ -187,7 +187,7 @@ class SupporterConfigTest {
         String src = Files.readString(Path.of("src", "main", "java", "com", "peoplesserver",
                 "supportermod", "command", "SupporterCommand.java"), StandardCharsets.UTF_8);
         java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("(?:DESIGNS|HATS|SHOES)\\.put\\(\"([a-z]+)\"").matcher(src);
+                .compile("(?:DESIGNS|HATS|SHOES)\\.put\\(\"([a-z-]+)\"").matcher(src);
         List<String> names = new ArrayList<>();
         while (m.find()) {
             names.add(m.group(1));

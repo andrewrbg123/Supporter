@@ -562,7 +562,8 @@ public final class SupporterConfig {
         Map<String, Integer> out = new LinkedHashMap<>();
         out.put("black", 100);   // the seventh cape — the first paid one
         out.put("beanie", 100);
-        out.put("top", 150);
+        out.put("top-hat", 150); // was "top" until 0.21.4; a stale "top" key in a live config
+                                 // prices nothing and is harmless
         out.put("wizard", 200);
         return out;
     }

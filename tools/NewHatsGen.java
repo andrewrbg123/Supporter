@@ -240,48 +240,49 @@ public final class NewHatsGen {
     // --- beanie ---------------------------------------------------------------------------
 
     /**
-     * 128x128 — the only sheet here that outgrew 96. The 0.21.3 beanie wraps OVER the fallback
-     * haircut (the first one, 36x35, sat INSIDE the hair mass and rendered as a headband with
-     * hair bulging out of it — the crown/cowboy data says the hair exceeds 46x42 and stays
-     * within 52x48), and a 50x48 shell top face plus a 52x50 band face no longer pack into 96.
+     * The beanie sits IN the hair on purpose — v0.21.3 briefly "fixed" it to wrap over the
+     * fallback haircut like the cowboy brim, and the owner's verdict was immediate: it looked
+     * like a cowboy hat, and there was nothing wrong with the original. The knit band across
+     * the forehead with hair above it and the bobble on top IS the beanie look on this rig.
+     * Reverted the same day; do not resize it again.
      */
     private static BufferedImage beanie() {
-        BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage img = new BufferedImage(TEX, TEX, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
 
-        // Shell: vertical knit ribs.
-        knit(g, 1, 1, 50, 12, false);  // f/b
-        knit(g, 1, 15, 48, 12, false); // l/r
-        // Shell top/bottom: the same ribs, slightly darker — the crown of the hat.
-        for (int y = 0; y < 48; y++) {
-            for (int x = 0; x < 50; x++) {
+        // Shell: vertical knit ribs, darkening slightly toward the bottom.
+        knit(g, 1, 1, 36, 12, false);  // f/b
+        knit(g, 1, 15, 35, 12, false); // l/r
+        // Shell top/bottom: ribs converge — painted as the same vertical ribs, slightly darker.
+        for (int y = 0; y < 35; y++) {
+            for (int x = 0; x < 36; x++) {
                 g.setColor(mix((x % 4) < 2 ? KNIT : KNIT_DEEP, KNIT_TRIM, 0.25f));
-                g.fillRect(1 + x, 43 + y, 1, 1);
+                g.fillRect(1 + x, 29 + y, 1, 1);
             }
         }
 
         // Band: horizontal ribs, the rolled edge.
-        knit(g, 1, 29, 52, 5, true);  // f/b
-        knit(g, 1, 36, 50, 5, true);  // l/r
-        for (int y = 0; y < 50; y++) {
-            for (int x = 0; x < 52; x++) {
+        knit(g, 39, 1, 38, 5, true);  // f/b
+        knit(g, 39, 8, 37, 5, true);  // l/r
+        for (int y = 0; y < 37; y++) {
+            for (int x = 0; x < 38; x++) {
                 g.setColor((y % 2) == 0 ? KNIT_DEEP : KNIT_TRIM);
-                g.fillRect(53 + x, 43 + y, 1, 1);
+                g.fillRect(39 + x, 14 + y, 1, 1);
             }
         }
 
-        // Bobble: cream with speckle. f/b at (55,1), l/r at (69,1), t/b at (55,10).
-        for (int y = 0; y < 7; y++) {
-            for (int x = 0; x < 12; x++) {
+        // Bobble: cream with speckle.
+        for (int y = 0; y < 6; y++) {
+            for (int x = 0; x < 10; x++) {
                 g.setColor(((x * 3 + y * 5) % 7) == 0 ? mix(CREAM, KNIT_DEEP, 0.3f) : CREAM);
-                g.fillRect(55 + x, 1 + y, 1, 1);
-                g.fillRect(69 + x, 1 + y, 1, 1);
+                g.fillRect(1 + x, 66 + y, 1, 1);
+                g.fillRect(13 + x, 66 + y, 1, 1);
             }
         }
-        for (int y = 0; y < 12; y++) {
-            for (int x = 0; x < 12; x++) {
+        for (int y = 0; y < 10; y++) {
+            for (int x = 0; x < 10; x++) {
                 g.setColor(((x * 3 + y * 5) % 7) == 0 ? mix(CREAM, KNIT_DEEP, 0.3f) : CREAM);
-                g.fillRect(55 + x, 10 + y, 1, 1);
+                g.fillRect(1 + x, 74 + y, 1, 1);
             }
         }
 

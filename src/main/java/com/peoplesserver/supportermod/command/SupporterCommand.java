@@ -806,7 +806,10 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             HATS.put("cowboy", "Supporter_Hat_Cowboy");
             HATS.put("shades", "Supporter_Shades");
             // The 0.20.0 restock — all three priced via gearCosts; the original three stay free.
-            HATS.put("top", "Supporter_Hat_Top");
+            // "top-hat" was "top" until 0.21.4 (renamed on request — "top" alone read as
+            // nothing). The ITEM id stays Supporter_Hat_Top forever, and migration V7 moved
+            // the gear:top unlocks, because a rename must never cost anybody a purchase.
+            HATS.put("top-hat", "Supporter_Hat_Top");
             HATS.put("wizard", "Supporter_Hat_Wizard");
             HATS.put("beanie", "Supporter_Hat_Beanie");
         }
