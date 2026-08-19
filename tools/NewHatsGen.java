@@ -86,38 +86,40 @@ public final class NewHatsGen {
         g.fillRect(1, 46, 46, 2);
         g.fillRect(1, 49, 44, 2);
 
-        // Crown front/back: vertical sheen stripes, band on the bottom four rows, amber pin.
-        crownSide(g, 55, 1, 26, true);
+        // Crown front/back: vertical sheen stripes, band on the bottom five rows, amber pin.
+        // 24x26 since 0.21.3 — the first live look read as a fedora: an 18-tall crown on a
+        // 46-wide brim is squat. A top hat's crown has to dominate the brim.
+        crownSide(g, 55, 1, 24, 26, true);
         // Crown left/right: same, no pin.
-        crownSide(g, 55, 20, 24, false);
+        crownSide(g, 55, 28, 22, 26, false);
 
         // Crown top/bottom: flat silk with a faint ring.
-        for (int y = 0; y < 24; y++) {
-            for (int x = 0; x < 26; x++) {
+        for (int y = 0; y < 22; y++) {
+            for (int x = 0; x < 24; x++) {
                 g.setColor(((x + y) & 3) == 0 ? SILK : mix(SILK, SILK_DEEP, 0.35f));
-                g.fillRect(55 + x, 39 + y, 1, 1);
+                g.fillRect(55 + x, 55 + y, 1, 1);
             }
         }
         g.setColor(SILK_DEEP);
-        g.drawRect(55, 39, 25, 23);
+        g.drawRect(55, 55, 23, 21);
 
         g.dispose();
         return img;
     }
 
-    private static void crownSide(Graphics2D g, int ox, int oy, int w, boolean pin) {
-        for (int y = 0; y < 18; y++) {
+    private static void crownSide(Graphics2D g, int ox, int oy, int w, int h, boolean pin) {
+        for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                Color c = (x % 6) == 2 ? SILK_SHEEN : mix(SILK, SILK_DEEP, y / 34f);
+                Color c = (x % 6) == 2 ? SILK_SHEEN : mix(SILK, SILK_DEEP, y / (h * 1.9f));
                 g.setColor(c);
                 g.fillRect(ox + x, oy + y, 1, 1);
             }
         }
         g.setColor(TOP_BAND);
-        g.fillRect(ox, oy + 14, w, 4);
+        g.fillRect(ox, oy + h - 5, w, 5);
         if (pin) {
             g.setColor(AMBER);
-            g.fillRect(ox + w / 2 - 1, oy + 14, 3, 4);
+            g.fillRect(ox + w / 2 - 1, oy + h - 5, 3, 5);
         }
     }
 
@@ -237,43 +239,49 @@ public final class NewHatsGen {
 
     // --- beanie ---------------------------------------------------------------------------
 
+    /**
+     * 128x128 — the only sheet here that outgrew 96. The 0.21.3 beanie wraps OVER the fallback
+     * haircut (the first one, 36x35, sat INSIDE the hair mass and rendered as a headband with
+     * hair bulging out of it — the crown/cowboy data says the hair exceeds 46x42 and stays
+     * within 52x48), and a 50x48 shell top face plus a 52x50 band face no longer pack into 96.
+     */
     private static BufferedImage beanie() {
-        BufferedImage img = new BufferedImage(TEX, TEX, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage img = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
 
-        // Shell: vertical knit ribs, darkening slightly toward the bottom.
-        knit(g, 1, 1, 36, 12, false);  // f/b
-        knit(g, 1, 15, 35, 12, false); // l/r
-        // Shell top/bottom: ribs converge — painted as the same vertical ribs, slightly darker.
-        for (int y = 0; y < 35; y++) {
-            for (int x = 0; x < 36; x++) {
+        // Shell: vertical knit ribs.
+        knit(g, 1, 1, 50, 12, false);  // f/b
+        knit(g, 1, 15, 48, 12, false); // l/r
+        // Shell top/bottom: the same ribs, slightly darker — the crown of the hat.
+        for (int y = 0; y < 48; y++) {
+            for (int x = 0; x < 50; x++) {
                 g.setColor(mix((x % 4) < 2 ? KNIT : KNIT_DEEP, KNIT_TRIM, 0.25f));
-                g.fillRect(1 + x, 29 + y, 1, 1);
+                g.fillRect(1 + x, 43 + y, 1, 1);
             }
         }
 
         // Band: horizontal ribs, the rolled edge.
-        knit(g, 39, 1, 38, 5, true);  // f/b
-        knit(g, 39, 8, 37, 5, true);  // l/r
-        for (int y = 0; y < 37; y++) {
-            for (int x = 0; x < 38; x++) {
+        knit(g, 1, 29, 52, 5, true);  // f/b
+        knit(g, 1, 36, 50, 5, true);  // l/r
+        for (int y = 0; y < 50; y++) {
+            for (int x = 0; x < 52; x++) {
                 g.setColor((y % 2) == 0 ? KNIT_DEEP : KNIT_TRIM);
-                g.fillRect(39 + x, 14 + y, 1, 1);
+                g.fillRect(53 + x, 43 + y, 1, 1);
             }
         }
 
-        // Bobble: cream with speckle.
-        for (int y = 0; y < 6; y++) {
-            for (int x = 0; x < 10; x++) {
+        // Bobble: cream with speckle. f/b at (55,1), l/r at (69,1), t/b at (55,10).
+        for (int y = 0; y < 7; y++) {
+            for (int x = 0; x < 12; x++) {
                 g.setColor(((x * 3 + y * 5) % 7) == 0 ? mix(CREAM, KNIT_DEEP, 0.3f) : CREAM);
-                g.fillRect(1 + x, 66 + y, 1, 1);
-                g.fillRect(13 + x, 66 + y, 1, 1);
+                g.fillRect(55 + x, 1 + y, 1, 1);
+                g.fillRect(69 + x, 1 + y, 1, 1);
             }
         }
-        for (int y = 0; y < 10; y++) {
-            for (int x = 0; x < 10; x++) {
+        for (int y = 0; y < 12; y++) {
+            for (int x = 0; x < 12; x++) {
                 g.setColor(((x * 3 + y * 5) % 7) == 0 ? mix(CREAM, KNIT_DEEP, 0.3f) : CREAM);
-                g.fillRect(1 + x, 74 + y, 1, 1);
+                g.fillRect(55 + x, 10 + y, 1, 1);
             }
         }
 
