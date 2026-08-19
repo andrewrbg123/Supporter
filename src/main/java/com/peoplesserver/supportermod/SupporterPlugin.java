@@ -66,6 +66,7 @@ public final class SupporterPlugin extends JavaPlugin {
     private Scheduler.Task reconcileTask;
     private Scheduler.Task trailTask;
     private Scheduler.Task questTask;
+    private Scheduler.Task questSampleTask;
 
     /** Non-null when setup failed; reported by every command so it cannot go unnoticed. */
     private volatile String startupError;
@@ -205,10 +206,14 @@ public final class SupporterPlugin extends JavaPlugin {
             long trailMs = Math.max(50L, config.trailIntervalTicks() * 50L);
             this.trailTask = scheduler.scheduleRepeating(trails::tick, trailMs, trailMs);
 
-            // 0.21.0: quests. EXACTLY 60s — each firing credits one minute of playtime, so
-            // the interval is the unit, not a tuning knob. See QuestTracker.
+            // 0.21.0: quests. The minute tick is EXACTLY 60s — each firing credits one minute
+            // of playtime, so the interval is the unit, not a tuning knob. The 10s sampler
+            // (0.21.1) only accumulates travel in memory; see QuestTracker.
             QuestTracker questTracker = new QuestTracker(service, scheduler, log);
-            this.questTask = scheduler.scheduleRepeating(questTracker::tick, 60_000L, 60_000L);
+            this.questTask = scheduler.scheduleRepeating(
+                    questTracker::minuteTick, 60_000L, 60_000L);
+            this.questSampleTask = scheduler.scheduleRepeating(
+                    questTracker::sampleTick, 10_000L, 10_000L);
             getEventRegistry().registerGlobal(
                     PlayerChatEvent.class, questTracker::onPlayerChat);
 
@@ -236,6 +241,14 @@ public final class SupporterPlugin extends JavaPlugin {
     }
 
     private void closeQuietly() {
+        if (questSampleTask != null) {
+            try {
+                questSampleTask.cancel();
+            } catch (Throwable ignored) {
+                // shutting down anyway
+            }
+            questSampleTask = null;
+        }
         if (questTask != null) {
             try {
                 questTask.cancel();

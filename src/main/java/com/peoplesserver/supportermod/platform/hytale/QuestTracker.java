@@ -14,39 +14,50 @@ import com.peoplesserver.supportermod.platform.PluginLog;
 import com.peoplesserver.supportermod.platform.Scheduler;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.joml.Vector3d;
 
 /**
- * Feeds quest progress from what players actually do: one tick a minute for playtime, distance
- * and day-counting, plus a chat listener for message quests.
+ * Feeds quest progress from what players actually do: positions sampled every ten seconds for
+ * travel, a minute tick for playtime and day-counting, and a chat listener for message quests.
  *
- * <p><b>The tick IS the minute.</b> It must be scheduled at exactly 60s, because each firing
- * credits one minute of playtime to everyone online — a different interval would make "Play
- * for 30 minutes" mean something else.
+ * <p><b>Travel is a path, not a displacement.</b> The first build sampled once a minute and
+ * credited the straight-line distance between samples, and the live test showed exactly what
+ * that means: a player who runs, mines and fights ends most minutes near where they started,
+ * so a busy session credited 45 blocks. Positions are therefore sampled every
+ * {@link #SAMPLE_SECONDS} seconds into an in-memory accumulator — eight legs a minute
+ * approximates the real path — and the accumulated whole blocks are flushed to the database on
+ * the minute tick. Sampling is cheap (the trail system reads the same component every 400ms);
+ * it is the WRITES that stay once a minute.
  *
- * <p>Thread discipline follows {@link TrailSystem} exactly, with one extra hop: the world
- * thread only <em>snapshots</em> positions, then hands the list back to the plugin scheduler
- * for the SQLite writes. Component reads belong on the world thread; database writes do not
- * need to be there and so are kept off it.
+ * <p><b>The minute tick IS the minute.</b> It must be scheduled at exactly 60s, because each
+ * firing credits one minute of playtime to everyone online.
  *
- * <p>Distance is clamped per sample: a step longer than {@link #MAX_STEP_BLOCKS} in one minute
- * is a teleport — /home, a warp, a respawn — not travel, and does not count. Walking speed
- * cannot legitimately cover that far between samples.
+ * <p>Thread discipline follows {@link TrailSystem}, with one extra hop: world threads only
+ * <em>snapshot</em> positions and hand the list back to the single scheduler thread, which
+ * owns all tracker state and every SQLite write. No lock needed — one writer.
+ *
+ * <p>A step longer than {@link #MAX_STEP_BLOCKS} in one sample is a teleport — /home, a warp,
+ * a respawn — not travel, and resets the leg instead of counting. A world change does the
+ * same: distance between two worlds is meaningless.
  */
 public final class QuestTracker {
 
-    private static final double MAX_STEP_BLOCKS = 300;
+    private static final int SAMPLE_SECONDS = 10;
+    /** ~15 blocks/second sustained — above any legitimate movement, below any teleport. */
+    private static final double MAX_STEP_BLOCKS = 150;
 
     private final SupporterService service;
     private final Scheduler scheduler;
     private final PluginLog log;
 
-    /** Last sampled position per player, for the distance delta. */
-    private final Map<UUID, Vector3d> lastPos = new ConcurrentHashMap<>();
+    /** Per-player travel state. Touched only on the scheduler thread. */
+    private final Map<UUID, Travel> travel = new HashMap<>();
 
     private volatile long lastWarnAt;
 
@@ -56,8 +67,21 @@ public final class QuestTracker {
         this.log = log;
     }
 
-    /** Called from the scheduler thread, once a minute. Does no world work itself. */
-    public void tick() {
+    /** Called from the scheduler thread every {@value #SAMPLE_SECONDS}s. Accumulates only. */
+    public void sampleTick() {
+        forEachWorld(samples -> accumulate(samples));
+    }
+
+    /** Called from the scheduler thread once a minute: playtime, day marks, travel flush. */
+    public void minuteTick() {
+        forEachWorld(samples -> applyMinute(samples));
+    }
+
+    private interface SampleSink {
+        void accept(List<Sample> samples);
+    }
+
+    private void forEachWorld(SampleSink sink) {
         try {
             Universe universe = Universe.get();
             if (universe == null) {
@@ -68,7 +92,7 @@ public final class QuestTracker {
                     continue;
                 }
                 final World w = world;
-                w.execute(() -> snapshotWorld(w));
+                w.execute(() -> snapshotWorld(w, sink));
             }
         } catch (Throwable t) {
             warnOccasionally("Quest tick failed", t);
@@ -76,7 +100,7 @@ public final class QuestTracker {
     }
 
     /** Runs ON the world thread: reads positions, nothing else, and hands the list back. */
-    private void snapshotWorld(World world) {
+    private void snapshotWorld(World world, SampleSink sink) {
         try {
             Store<EntityStore> store = world.getEntityStore().getStore();
             if (store == null) {
@@ -86,6 +110,9 @@ public final class QuestTracker {
             if (players == null || players.isEmpty()) {
                 return;
             }
+            // The world is identified by hash rather than held: keeping World references in
+            // tracker state would pin unloaded worlds in memory.
+            int worldId = System.identityHashCode(world);
             List<Sample> samples = new ArrayList<>(players.size());
             for (PlayerRef p : players) {
                 if (p == null) {
@@ -101,41 +128,62 @@ public final class QuestTracker {
                 if (tc == null || tc.getPosition() == null) {
                     continue;
                 }
-                samples.add(new Sample(uuid, new Vector3d(tc.getPosition())));
+                samples.add(new Sample(uuid, worldId, new Vector3d(tc.getPosition())));
             }
             if (!samples.isEmpty()) {
-                scheduler.runOnce(() -> apply(samples), 0);
+                scheduler.runOnce(() -> runSink(sink, samples), 0);
             }
         } catch (Throwable t) {
             warnOccasionally("Quest snapshot failed", t);
         }
     }
 
-    /** Runs on the scheduler thread: all the SQLite writes. */
-    private void apply(List<Sample> samples) {
+    private void runSink(SampleSink sink, List<Sample> samples) {
         try {
-            for (Sample s : samples) {
-                if (!service.isSupporter(s.uuid)) {
-                    lastPos.remove(s.uuid);
-                    continue;
-                }
-                service.markQuestDay(s.uuid);
-                service.recordQuestProgress(s.uuid, Quests.Unit.MINUTES, 1);
-                Vector3d previous = lastPos.get(s.uuid);
-                if (previous != null) {
-                    double moved = previous.distance(s.pos);
-                    if (moved >= 1 && moved <= MAX_STEP_BLOCKS) {
-                        service.recordQuestProgress(s.uuid, Quests.Unit.BLOCKS, (int) moved);
-                    }
-                }
-                lastPos.put(s.uuid, s.pos);
-            }
-            if (lastPos.size() > samples.size() * 4 + 64) {
-                lastPos.keySet().retainAll(samples.stream().map(s -> s.uuid)
-                        .collect(java.util.stream.Collectors.toSet()));
-            }
+            sink.accept(samples);
         } catch (Throwable t) {
             warnOccasionally("Quest progress write failed", t);
+        }
+    }
+
+    /** Scheduler thread: extends each player's path by one leg. No database. */
+    private void accumulate(List<Sample> samples) {
+        for (Sample s : samples) {
+            Travel state = travel.get(s.uuid);
+            if (state == null || state.worldId != s.worldId) {
+                travel.put(s.uuid, new Travel(s.worldId, s.pos));
+                continue;
+            }
+            double leg = state.pos.distance(s.pos);
+            if (leg >= 0.5 && leg <= MAX_STEP_BLOCKS) {
+                state.pending += leg;
+            }
+            // A teleport-sized leg counts nothing; either way the new position is the
+            // baseline for the next leg.
+            state.pos = s.pos;
+        }
+    }
+
+    /** Scheduler thread: the once-a-minute credits and the travel flush. */
+    private void applyMinute(List<Sample> samples) {
+        accumulate(samples); // the minute boundary is also a leg
+        for (Sample s : samples) {
+            if (!service.isSupporter(s.uuid)) {
+                travel.remove(s.uuid);
+                continue;
+            }
+            service.markQuestDay(s.uuid);
+            service.recordQuestProgress(s.uuid, Quests.Unit.MINUTES, 1);
+            Travel state = travel.get(s.uuid);
+            if (state != null && state.pending >= 1) {
+                int whole = (int) state.pending;
+                service.recordQuestProgress(s.uuid, Quests.Unit.BLOCKS, whole);
+                state.pending -= whole;
+            }
+        }
+        if (travel.size() > samples.size() * 4 + 64) {
+            Set<UUID> online = samples.stream().map(s -> s.uuid).collect(Collectors.toSet());
+            travel.keySet().retainAll(online);
         }
     }
 
@@ -169,5 +217,17 @@ public final class QuestTracker {
         log.error(message, t);
     }
 
-    private record Sample(UUID uuid, Vector3d pos) {}
+    private record Sample(UUID uuid, int worldId, Vector3d pos) {}
+
+    /** Mutable on purpose — owned by the single scheduler thread. */
+    private static final class Travel {
+        int worldId;
+        Vector3d pos;
+        double pending;
+
+        Travel(int worldId, Vector3d pos) {
+            this.worldId = worldId;
+            this.pos = pos;
+        }
+    }
 }
