@@ -534,13 +534,16 @@ public final class SupporterPanel {
         // A purchase changes trail wearability too — the Trails tab must reveal the new Wear
         // button without the panel being reopened. Same lesson as the Status tab, one tab over.
         refreshTrails(service, uuid, ctx);
-        // v0.19.0: a purchase also changes which skin Buy buttons should show.
+        // A purchase changes which skin buttons show in BOTH places: the Shop button
+        // disappears, the Wardrobe button appears.
         for (String skinName : SkinChanger.allNames()) {
             int cost = skinCost(skinName);
             if (cost > 0) {
                 ctx.editById(skinBuyId(skinName), CustomButtonBuilder.class,
                         b -> b.withVisible(skinBuyVisible(service, uuid, skinName, cost)));
             }
+            ctx.editById("WdSkin_" + skinName, CustomButtonBuilder.class,
+                    b -> b.withVisible(service.ownsSkin(uuid, skinName, skinCost(skinName))));
         }
         ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(note));
         ctx.updatePage(false);
@@ -1009,12 +1012,16 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("WdSkins",
                 "Body skins — statue mode; stays on across relogs", theme.heading(), row++));
         index = 0;
+        // Locked skins are hidden here, not advertised - the Wardrobe is what you own, the
+        // Shop is what you could. Built-and-hidden rather than absent, so buying in the Shop
+        // reveals the button here without reopening the panel.
         for (String skinName : SkinChanger.allNames()) {
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdSkin_" + skinName, skinName, theme.buttonLabel(),
                     (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
-                            service, uuid, playerRef, skinName, world, ctx)));
+                            service, uuid, playerRef, skinName, world, ctx))
+                    .withVisible(service.ownsSkin(uuid, skinName, skinCost(skinName))));
             index++;
         }
         tab = (TabContentBuilder) tab.addChild(wearButton(
