@@ -511,6 +511,60 @@ public final class SupporterService {
      * <p>The whole thing runs in one transaction and the affordability check is re-read inside
      * it, so two commands racing cannot both pass the check and both spend.
      */
+    /**
+     * Buys a skin unlock. Same machinery as trails — the composite primary key on
+     * {@code supporter_unlocks} refuses a double charge at the database — with one namespace
+     * twist: the unlock is recorded as {@code skin:<name>}, because skin names and trail names
+     * collide ("gold" is both a trail and a tint) and an unlock of one must never grant the
+     * other.
+     *
+     * <p>The cost comes from the caller, because pricing needs to know whether the name is a
+     * tint or a costume and that catalogue lives in the UI layer — the same layering reason
+     * {@code setSkin} does not validate names.
+     */
+    public synchronized PurchaseResult purchaseSkin(UUID uuid, String skinName, int cost) {
+        Objects.requireNonNull(uuid, "uuid");
+        if (skinName == null || skinName.isBlank()) {
+            return PurchaseResult.UNKNOWN_ITEM;
+        }
+        if (cost <= 0) {
+            return PurchaseResult.FREE;
+        }
+        String unlockId = "skin:" + skinName.toLowerCase();
+        try {
+            return storage.transact(() -> {
+                if (storage.ownsUnlock(uuid, unlockId)) {
+                    return PurchaseResult.ALREADY_OWNED;
+                }
+                int balance = Math.max(0, tokensEarned(uuid) - storage.totalSpent(uuid));
+                if (balance < cost) {
+                    return PurchaseResult.NOT_ENOUGH_TOKENS;
+                }
+                long now = clock.millis();
+                if (!storage.addUnlock(uuid, unlockId, cost, now)) {
+                    return PurchaseResult.ALREADY_OWNED; // lost a race; nothing charged
+                }
+                storage.log(uuid, directory.usernameFor(uuid).orElse(null),
+                        "PURCHASE", unlockId + " for " + cost + " tokens", "player", now);
+                return PurchaseResult.BOUGHT;
+            });
+        } catch (SQLException e) {
+            throw new StorageException("Failed to purchase skin " + skinName, e);
+        }
+    }
+
+    /** Whether this player may wear a skin that costs {@code cost}. Free means yes. */
+    public boolean ownsSkin(UUID uuid, String skinName, int cost) {
+        if (cost <= 0) {
+            return true;
+        }
+        try {
+            return storage.ownsUnlock(uuid, "skin:" + skinName.toLowerCase());
+        } catch (SQLException e) {
+            throw new StorageException("Failed to check skin unlock " + skinName, e);
+        }
+    }
+
     public synchronized PurchaseResult purchaseTrail(UUID uuid, String trailId) {
         Objects.requireNonNull(uuid, "uuid");
         if (trailId == null || !config.trails().containsKey(trailId)) {

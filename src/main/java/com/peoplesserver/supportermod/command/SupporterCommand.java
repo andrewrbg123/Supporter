@@ -926,6 +926,18 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             java.util.UUID uuid = player.getUuid();
+            // v0.19.0: priced skins must be unlocked first — same ladder as the trails. Free
+            // skins pass straight through; owned ones too. The login re-apply deliberately does
+            // NOT re-check, so a skin worn before pricing existed keeps working until changed.
+            if (!off) {
+                int cost = plugin.config().skinCost(name,
+                        com.peoplesserver.supportermod.ui.SkinChanger.isCostume(name));
+                if (!service.ownsSkin(uuid, name, cost)) {
+                    err(ctx, "That skin is locked — " + cost + " tokens. /supporter buy "
+                            + name + ", or the Shop tab.");
+                    return;
+                }
+            }
             // The DB write happens before the world-thread hop: SQLite is safe from any thread,
             // and the choice must persist even if the visual push fails — login re-applies it.
             try {
@@ -1145,19 +1157,32 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             }
             String item = String.valueOf(ctx.get(idArg)).trim();
             try {
-                switch (service.purchaseTrail(uuid, item)) {
-                    case BOUGHT -> ok(ctx, "Unlocked " + item + "! Use /supporter trail "
-                            + item + " to wear it. Tokens left: " + service.tokenBalance(uuid));
+                // Trails first; if the name is not a trail, try the skin catalogue. The two
+                // namespaces collide on purpose-friendly names ("gold" is both), and trails win
+                // for backwards compatibility — the gold SKIN is bought via the panel, where the
+                // sections are separate.
+                SupporterService.PurchaseResult result = service.purchaseTrail(uuid, item);
+                String wearHint = "/supporter trail " + item;
+                if (result == SupporterService.PurchaseResult.UNKNOWN_ITEM
+                        && com.peoplesserver.supportermod.ui.SkinChanger.knows(item)) {
+                    int cost = plugin.config().skinCost(item,
+                            com.peoplesserver.supportermod.ui.SkinChanger.isCostume(item));
+                    result = service.purchaseSkin(uuid, item, cost);
+                    wearHint = "/supporter skin " + item;
+                }
+                String hint = wearHint;
+                switch (result) {
+                    case BOUGHT -> ok(ctx, "Unlocked " + item + "! Use " + hint
+                            + " to wear it. Tokens left: " + service.tokenBalance(uuid));
                     case ALREADY_OWNED -> info(ctx, "You already own " + item + ".");
-                    case FREE -> info(ctx, item + " is free — just /supporter trail " + item + ".");
-                    case NOT_ENOUGH_TOKENS -> err(ctx, "Not enough tokens. "
-                            + item + " costs " + plugin.config().trailCost(item)
-                            + ", you have " + service.tokenBalance(uuid) + ".");
+                    case FREE -> info(ctx, item + " is free — just " + hint + ".");
+                    case NOT_ENOUGH_TOKENS -> err(ctx, "Not enough tokens — you have "
+                            + service.tokenBalance(uuid) + ".");
                     case UNKNOWN_ITEM -> err(ctx, "No such item. /supporter shop to see the list.");
                 }
             } catch (RuntimeException e) {
                 err(ctx, "Purchase failed: " + e.getMessage());
-                plugin.log().error("purchaseTrail failed for " + uuid, e);
+                plugin.log().error("purchase failed for " + uuid, e);
             }
         }
     }

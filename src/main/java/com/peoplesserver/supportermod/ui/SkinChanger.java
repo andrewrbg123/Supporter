@@ -61,6 +61,11 @@ public final class SkinChanger {
         return out;
     }
 
+    /** Whether the name is a costume preset rather than a tint — pricing needs the distinction. */
+    public static boolean isCostume(String name) {
+        return name != null && COSTUME_JSON.containsKey(name.toLowerCase());
+    }
+
     public static boolean knows(String name) {
         if (name == null) {
             return false;

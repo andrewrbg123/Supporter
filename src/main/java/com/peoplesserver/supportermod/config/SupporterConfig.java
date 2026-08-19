@@ -143,6 +143,23 @@ public final class SupporterConfig {
      */
     private Map<String, Integer> trailCosts = defaultTrailCosts();
 
+    /**
+     * Skin name → cost in tokens. Absent or 0 means free.
+     *
+     * <p>Two tints ship free (gold, silver) and two priced, mirroring the trail ladder: every
+     * supporter gets the perk immediately, tenure buys the rest. Costume presets are usually NOT
+     * listed here — anything absent falls back to {@link #defaultCostumeCost} if it is a
+     * costume, so a preset dropped into costumes/ is priced automatically. List a costume here
+     * explicitly (0 to make it free) to override.
+     */
+    private Map<String, Integer> skinCosts = defaultSkinCosts();
+
+    /**
+     * What a costume costs when {@code skinCosts} does not name it. The price of "any preset an
+     * admin drops in the folder", so new costumes are never accidentally free.
+     */
+    private int defaultCostumeCost = 300;
+
     // --- Phase 6: priority queue ----------------------------------------------------------
     private int reservedSlots = 0;
 
@@ -372,6 +389,7 @@ public final class SupporterConfig {
         }
         backfillTrails();
         backfillTrailCosts();
+        backfillSkinCosts();
     }
 
     /**
@@ -422,6 +440,40 @@ public final class SupporterConfig {
             trailCosts = new LinkedHashMap<>(trailCosts);
         }
         defaultTrailCosts().forEach(trailCosts::putIfAbsent);
+    }
+
+    private static Map<String, Integer> defaultSkinCosts() {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        out.put("iron", 150);
+        out.put("shadow", 150);
+        return out;
+    }
+
+    private void backfillSkinCosts() {
+        if (skinCosts == null) {
+            skinCosts = new LinkedHashMap<>();
+        } else {
+            skinCosts = new LinkedHashMap<>(skinCosts);
+        }
+        defaultSkinCosts().forEach(skinCosts::putIfAbsent);
+    }
+
+    /**
+     * Cost of a skin in tokens.
+     *
+     * @param isCostume whether the name is a costume preset rather than a tint — costumes not
+     *     named in {@code skinCosts} fall back to {@code defaultCostumeCost}, so a preset
+     *     dropped into the folder is never accidentally free
+     */
+    public int skinCost(String name, boolean isCostume) {
+        if (name == null) {
+            return 0;
+        }
+        Integer explicit = skinCosts == null ? null : skinCosts.get(name.toLowerCase());
+        if (explicit != null) {
+            return Math.max(0, explicit);
+        }
+        return isCostume ? Math.max(0, defaultCostumeCost) : 0;
     }
 
     private void backfillTrails() {

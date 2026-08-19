@@ -267,9 +267,25 @@ public final class SupporterPanel {
      */
     private String unlocksText(SupporterService service, UUID uuid) {
         List<String> unlocks = service.unlocks(uuid);
-        return unlocks.isEmpty()
-                ? "No trails bought yet - the free ones are yours already"
-                : "Trails bought: " + String.join(", ", unlocks);
+        // Skin unlocks share the table under a "skin:" namespace (names collide with trails),
+        // so split them out for display rather than showing the raw prefixed ids.
+        List<String> trails = unlocks.stream().filter(u -> !u.startsWith("skin:")).toList();
+        List<String> skins = unlocks.stream().filter(u -> u.startsWith("skin:"))
+                .map(u -> u.substring(5)).toList();
+        if (trails.isEmpty() && skins.isEmpty()) {
+            return "Nothing bought yet - the free trails and skins are yours already";
+        }
+        StringBuilder out = new StringBuilder();
+        if (!trails.isEmpty()) {
+            out.append("Trails bought: ").append(String.join(", ", trails));
+        }
+        if (!skins.isEmpty()) {
+            if (out.length() > 0) {
+                out.append("   ");
+            }
+            out.append("Skins bought: ").append(String.join(", ", skins));
+        }
+        return out.toString();
     }
 
     private UIElementBuilder<?> perksTab(SupporterService service, UUID uuid) {
@@ -346,7 +362,69 @@ public final class SupporterPanel {
             }
             row++;
         }
+
+        // v0.19.0: priced skins, as a button grid rather than rows — ten of them would not fit
+        // as rows beside the trails. Only priced ones appear; free skins are not shop items.
+        // Buttons exist for every priced skin and visibility tracks owned/affordable, the same
+        // editById rule as everything else here.
+        row++;
+        tab = (TabContentBuilder) tab.addChild(line("ShopSkinsHead",
+                "Skins — tints and costumes; wear them from the Wardrobe tab",
+                theme.heading(), row++));
+        int skinIndex = 0;
+        for (String skinName : SkinChanger.allNames()) {
+            int cost = skinCost(skinName);
+            if (cost <= 0) {
+                continue;
+            }
+            tab = (TabContentBuilder) tab.addChild(wearButton(
+                    skinBuyId(skinName), skinName + " · " + cost, theme.buttonLabel(),
+                    (skinIndex % 6) * (BUY_WIDTH + 8),
+                    (row + (skinIndex / 6)) * ROW_HEIGHT - 4,
+                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
+                            buySkin(service, uuid, skinName, cost, world, ctx))
+                    .withVisible(skinBuyVisible(service, uuid, skinName, cost)));
+            skinIndex++;
+        }
         return tab;
+    }
+
+    private static String skinBuyId(String skinName) {
+        return "SkinBuy_" + skinName;
+    }
+
+    private int skinCost(String skinName) {
+        return plugin.config().skinCost(skinName, SkinChanger.isCostume(skinName));
+    }
+
+    private boolean skinBuyVisible(SupporterService service, UUID uuid, String name, int cost) {
+        return !service.ownsSkin(uuid, name, cost) && service.tokenBalance(uuid) >= cost;
+    }
+
+    private void buySkin(SupporterService service, UUID uuid, String skinName, int cost,
+                         World world, au.ellie.hyui.events.UIContext ctx) {
+        String note;
+        try {
+            note = switch (service.purchaseSkin(uuid, skinName, cost)) {
+                case BOUGHT -> "Unlocked " + skinName
+                        + " — wear it from the Wardrobe tab, or /supporter skin " + skinName;
+                case ALREADY_OWNED -> "You already own " + skinName;
+                case NOT_ENOUGH_TOKENS -> "Not enough tokens for " + skinName;
+                case FREE -> skinName + " is free — the Wardrobe tab has it";
+                case UNKNOWN_ITEM -> "That skin no longer exists";
+            };
+        } catch (RuntimeException e) {
+            plugin.log().error("Skin purchase failed for " + uuid + " (" + skinName + ")", e);
+            note = "Purchase failed — try /supporter buy " + skinName;
+        }
+        String message = note;
+        world.execute(() -> {
+            try {
+                refreshAfterPurchase(service, uuid, ctx, message);
+            } catch (Throwable t) {
+                plugin.log().warn("Skin purchase refresh failed: " + t);
+            }
+        });
     }
 
     /**
@@ -449,6 +527,14 @@ public final class SupporterPanel {
         // A purchase changes trail wearability too — the Trails tab must reveal the new Wear
         // button without the panel being reopened. Same lesson as the Status tab, one tab over.
         refreshTrails(service, uuid, ctx);
+        // v0.19.0: a purchase also changes which skin Buy buttons should show.
+        for (String skinName : SkinChanger.allNames()) {
+            int cost = skinCost(skinName);
+            if (cost > 0) {
+                ctx.editById(skinBuyId(skinName), CustomButtonBuilder.class,
+                        b -> b.withVisible(skinBuyVisible(service, uuid, skinName, cost)));
+            }
+        }
         ctx.editById(NOTICE_ID, LabelBuilder.class, label -> label.withText(note));
         ctx.updatePage(false);
     }
@@ -940,6 +1026,18 @@ public final class SupporterPanel {
     private void setSkin(SupporterService service, UUID uuid, PlayerRef playerRef,
                          String skinName, World world, au.ellie.hyui.events.UIContext ctx) {
         boolean off = skinName == null;
+        // Priced skins must be unlocked first — same ladder as the trails.
+        if (!off) {
+            int cost = skinCost(skinName);
+            if (!service.ownsSkin(uuid, skinName, cost)) {
+                world.execute(() -> {
+                    ctx.editById(NOTICE_ID, LabelBuilder.class, l -> l.withText(
+                            skinName + " is locked — " + cost + " tokens in the Shop tab."));
+                    ctx.updatePage(false);
+                });
+                return;
+            }
+        }
         try {
             service.setSkin(uuid, skinName);
         } catch (RuntimeException e) {
