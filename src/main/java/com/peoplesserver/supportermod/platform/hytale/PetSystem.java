@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Rotation3f;
+import com.hypixel.hytale.server.core.modules.entity.DespawnComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
@@ -48,6 +49,18 @@ public final class PetSystem {
 
     /** Beyond this the pet is respawned at the owner — sprinting outruns any follower. */
     private static final double CATCHUP_DISTANCE = 40;
+
+    /**
+     * The dead-man's switch (0.22.3). Every pet carries a {@link DespawnComponent} that the
+     * tick refreshes every second; a pet the plugin loses track of — a silently failed
+     * removal, a chunk unload, a kill -9 — is collected by the ENGINE within this window.
+     * Added after a live duplicate: a teleport-catchup removed a bunny whose chunk had
+     * unloaded, the removal silently failed exactly as the raid work documented, tracking was
+     * replaced, and the old bunny survived as a stray. Rather than verifying every removal
+     * path forever, the timer makes a leak self-collecting: correctness no longer depends on
+     * our bookkeeping being perfect.
+     */
+    private static final long DESPAWN_TTL_SECONDS = 120;
 
     /** Owner uuid → live pet. */
     private final Map<UUID, Pet> pets = new ConcurrentHashMap<>();
@@ -96,6 +109,9 @@ public final class PetSystem {
             return "spawn failed — the role may not have validated; see the boot log";
         }
         Ref<EntityStore> ref = pair.left();
+        store.putComponent(ref, DespawnComponent.getComponentType(),
+                new DespawnComponent(java.time.Instant.now()
+                        .plusSeconds(DESPAWN_TTL_SECONDS)));
         pets.put(ownerUuid, new Pet(roleName, ref));
         stamp(store, ref, ownerPos);
         return null;
@@ -109,6 +125,12 @@ public final class PetSystem {
         }
         if (pet.ref.isValid() && pet.ref.getStore() == store) {
             store.removeEntity(pet.ref, RemoveReason.REMOVE);
+            if (pet.ref.isValid()) {
+                // Removal can silently fail (unloaded chunk, mid-tick state). The live
+                // duplicate of 2026-08-19 was exactly this; now the timer collects it.
+                log.warn("Pet removal did not take for " + ownerUuid
+                        + " — the despawn timer will collect it");
+            }
         }
         pets.remove(ownerUuid);
         return true;
@@ -182,6 +204,10 @@ public final class PetSystem {
                     // The owner is not in this world any more (logout or world change): a pet
                     // with no owner present is exactly the leak the raid work warned about.
                     store.removeEntity(pet.ref, RemoveReason.REMOVE);
+                    if (pet.ref.isValid()) {
+                        log.warn("Pet orphan removal did not take for " + entry.getKey()
+                                + " — the despawn timer will collect it");
+                    }
                     pets.remove(entry.getKey());
                     continue;
                 }
@@ -193,6 +219,10 @@ public final class PetSystem {
                 if (petPos != null && petPos.distance(ownerPos) > CATCHUP_DISTANCE) {
                     // Too far behind to ever catch up; bring it to heel by respawn.
                     store.removeEntity(pet.ref, RemoveReason.REMOVE);
+                    if (pet.ref.isValid()) {
+                        log.warn("Pet catch-up removal did not take for " + entry.getKey()
+                                + " — the despawn timer will collect it");
+                    }
                     var npcPlugin = NPCPlugin.get();
                     var pair = npcPlugin == null ? null : npcPlugin.spawnNPC(store, pet.role,
                             null, new Vector3d(ownerPos).add(1.5, 0, 1.5),
@@ -235,7 +265,7 @@ public final class PetSystem {
         }
     }
 
-    /** Writes the owner's position into the role's ReadPosition slot 0 — the follow target. */
+    /** Writes the owner's position into the follow slot, and re-arms the despawn timer. */
     private void stamp(Store<EntityStore> store, Ref<EntityStore> ref, Vector3d ownerPos) {
         NPCEntity npc = store.getComponent(ref, NPCEntity.getComponentType());
         if (npc == null || npc.getRole() == null) {
@@ -243,6 +273,16 @@ public final class PetSystem {
         }
         npc.getRole().getMarkedEntitySupport().getStoredPosition(0)
                 .set(ownerPos.x, ownerPos.y, ownerPos.z);
+        java.time.Instant deadline =
+                java.time.Instant.now().plusSeconds(DESPAWN_TTL_SECONDS);
+        DespawnComponent despawn =
+                store.getComponent(ref, DespawnComponent.getComponentType());
+        if (despawn != null) {
+            despawn.setDespawn(deadline);
+        } else {
+            store.putComponent(ref, DespawnComponent.getComponentType(),
+                    new DespawnComponent(deadline));
+        }
     }
 
     /**

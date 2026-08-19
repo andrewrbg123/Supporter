@@ -338,8 +338,8 @@ public final class SupporterPanel {
                 "Homes: " + config.supporterHomeSlots()
                         + " instead of " + config.defaultHomeSlots(), theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkPets",
-                "Pets - cosmetic followers: " + String.join(", ",
-                        SupporterCommand.PetSub.PETS.keySet()), theme.body(), row++));
+                "Pets - " + SupporterCommand.PetSub.PETS.size()
+                        + " cosmetic followers - the Wardrobe tab", theme.body(), row++));
         tab = (TabContentBuilder) tab.addChild(line("PkQuests",
                 "Daily and weekly quests that pay tokens - the Quests tab",
                 theme.body(), row++));
@@ -397,15 +397,25 @@ public final class SupporterPanel {
                 "Trails — wear them from the Trails tab", theme.heading(), row++));
         List<String> ids = new ArrayList<>(config.trails().keySet());
         ids.sort(Comparator.comparingInt(config::trailCost).thenComparing(id -> id));
-        int index = 0;
-        // Six per row at the narrow width — trail names are short ("hearts · 150" is 12
-        // characters, full-size at 120), and the row this reclaims is what makes space for
-        // the Pets section below.
+        // COMPACT ORDERING (0.22.3, every grid here): buttons that will be VISIBLE are built
+        // first, hidden ones after. Positions are fixed at build time, so interleaving owned
+        // and unowned left holes wherever a hidden button sat — the live look was a grid of
+        // scattered islands. A purchase mid-session still hides its button in place (a gap
+        // until reopen), which reads fine; permanent holes did not.
+        List<String> priced = new ArrayList<>();
         for (String id : ids) {
-            int cost = config.trailCost(id);
-            if (cost <= 0) {
-                continue; // free trails are not shop items; the Trails tab has them
+            if (config.trailCost(id) > 0 && !service.unlocks(uuid).contains(id)) {
+                priced.add(id);
             }
+        }
+        for (String id : ids) {
+            if (config.trailCost(id) > 0 && service.unlocks(uuid).contains(id)) {
+                priced.add(id);
+            }
+        }
+        int index = 0;
+        for (String id : priced) {
+            int cost = config.trailCost(id);
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     buyId(id), id + " · " + cost, theme.buttonLabel(),
                     (index % 6) * (BUY_WIDTH + 8),
@@ -417,55 +427,80 @@ public final class SupporterPanel {
         }
         row += Math.max(1, (index + 5) / 6);
 
-        // Gear and pets share one section since 0.22.2: thirteen priced pets need three grid
-        // rows, and the header this merge saves is what keeps the tab at the 13-row ceiling.
-        // One story anyway — the Wardrobe is where both get worn. Five per row at 176 wide:
-        // "tortoise · 400" (14 characters) renders full-size, and 5 x 176 + 4 x 8 = 912,
-        // flush with the content width.
+        // Gear and pets share one section since 0.22.2 — one story anyway, the Wardrobe is
+        // where both get worn. Six per row at 144 wide (0.22.3): the longest label here,
+        // "squirrel · 250" at 14 characters, still renders full-size, and six columns keep
+        // seventeen items to three rows so the tab stays inside the 12-row ceiling the live
+        // notice-line collision redrew.
         tab = (TabContentBuilder) tab.addChild(line("ShopGearHead",
                 "Gear and pets — the Wardrobe tab has them", theme.heading(), row++));
-        index = 0;
+        java.util.Set<String> gearSet = new java.util.HashSet<>(gearNames());
+        List<String> ordered = new ArrayList<>();
         for (String name : gearNames()) {
-            int cost = config.gearCost(name);
-            if (cost <= 0) {
-                continue;
+            if (config.gearCost(name) > 0
+                    && !service.ownsGear(uuid, name, config.gearCost(name))) {
+                ordered.add(name);
             }
-            tab = (TabContentBuilder) tab.addChild(wearButton(
-                    gearBuyId(name), name + " · " + cost, theme.buttonLabel(),
-                    (index % 5) * (176 + 8),
-                    (row + (index / 5)) * ROW_HEIGHT - 4,
-                    176,
-                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
-                            buyGear(service, uuid, name, cost, world, ctx))
-                    .withVisible(!service.ownsGear(uuid, name, cost)));
-            index++;
         }
         for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
-            int cost = config.petCost(petName);
-            if (cost <= 0) {
-                continue; // the free pair are not shop items; the Wardrobe has them
+            if (config.petCost(petName) > 0
+                    && !service.ownsPet(uuid, petName, config.petCost(petName))) {
+                ordered.add(petName);
             }
+        }
+        for (String name : gearNames()) {
+            if (config.gearCost(name) > 0
+                    && service.ownsGear(uuid, name, config.gearCost(name))) {
+                ordered.add(name);
+            }
+        }
+        for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
+            if (config.petCost(petName) > 0
+                    && service.ownsPet(uuid, petName, config.petCost(petName))) {
+                ordered.add(petName);
+            }
+        }
+        index = 0;
+        for (String name : ordered) {
+            boolean isGear = gearSet.contains(name);
+            int cost = isGear ? config.gearCost(name) : config.petCost(name);
+            java.util.function.BiConsumer<Void, au.ellie.hyui.events.UIContext> onClick =
+                    isGear
+                            ? (v, ctx) -> buyGear(service, uuid, name, cost, world, ctx)
+                            : (v, ctx) -> buyPet(service, uuid, name, cost, world, ctx);
             tab = (TabContentBuilder) tab.addChild(wearButton(
-                    petBuyId(petName), petName + " · " + cost, theme.buttonLabel(),
-                    (index % 5) * (176 + 8),
-                    (row + (index / 5)) * ROW_HEIGHT - 4,
-                    176,
-                    (Void v, au.ellie.hyui.events.UIContext ctx) ->
-                            buyPet(service, uuid, petName, cost, world, ctx))
-                    .withVisible(!service.ownsPet(uuid, petName, cost)));
+                    isGear ? gearBuyId(name) : petBuyId(name), name + " · " + cost,
+                    theme.buttonLabel(),
+                    (index % 6) * (144 + 8),
+                    (row + (index / 6)) * ROW_HEIGHT - 4,
+                    144,
+                    onClick)
+                    .withVisible(isGear
+                            ? !service.ownsGear(uuid, name, cost)
+                            : !service.ownsPet(uuid, name, cost)));
             index++;
         }
-        row += Math.max(1, (index + 4) / 5);
+        row += Math.max(1, (index + 5) / 6);
 
         tab = (TabContentBuilder) tab.addChild(line("ShopSkinsHead",
                 "Skins — tints and costumes; wear them from the Wardrobe tab",
                 theme.heading(), row++));
-        int skinIndex = 0;
+        List<String> skinOrder = new ArrayList<>();
         for (String skinName : SkinChanger.allNames()) {
             int cost = skinCost(skinName);
-            if (cost <= 0) {
-                continue;
+            if (cost > 0 && !service.ownsSkin(uuid, skinName, cost)) {
+                skinOrder.add(skinName);
             }
+        }
+        for (String skinName : SkinChanger.allNames()) {
+            int cost = skinCost(skinName);
+            if (cost > 0 && service.ownsSkin(uuid, skinName, cost)) {
+                skinOrder.add(skinName);
+            }
+        }
+        int skinIndex = 0;
+        for (String skinName : skinOrder) {
+            int cost = skinCost(skinName);
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     skinBuyId(skinName), skinName + " · " + cost, theme.buttonLabel(),
                     (skinIndex % SKIN_COLS) * (SKIN_BUY_WIDTH + 8),
@@ -1198,12 +1233,15 @@ public final class SupporterPanel {
 
         // Priced gear follows the 0.19.2 skin rule: the Wardrobe shows only what you own,
         // built-and-hidden while locked so a Shop purchase reveals the button in-place. Free
-        // gear is owned by everyone, so those buttons are always visible.
+        // gear is owned by everyone, so those buttons are always visible. Racks are built
+        // OWNED-FIRST (0.22.3) so the visible buttons pack from the left — interleaving left
+        // holes where locked buttons hid, and the live look was scattered islands.
         tab = (TabContentBuilder) tab.addChild(line("WdCapes",
                 "Capes — one chest item at a time", theme.heading(), row++));
         int index = 0;
         for (java.util.Map.Entry<String, String> cape
-                : SupporterCommand.CapeSub.DESIGNS.entrySet()) {
+                : ownedFirst(SupporterCommand.CapeSub.DESIGNS,
+                        name -> service.ownsGear(uuid, name, plugin.config().gearCost(name)))) {
             String hex = CAPE_COLORS.getOrDefault(cape.getKey(), SupporterTheme.INK_BODY);
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdCape_" + cape.getKey(), cape.getKey(), theme.swatchLabel(hex),
@@ -1221,7 +1259,9 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("WdHats",
                 "Headwear — one head item at a time", theme.heading(), row++));
         index = 0;
-        for (java.util.Map.Entry<String, String> hat : SupporterCommand.HatSub.HATS.entrySet()) {
+        for (java.util.Map.Entry<String, String> hat
+                : ownedFirst(SupporterCommand.HatSub.HATS,
+                        name -> service.ownsGear(uuid, name, plugin.config().gearCost(name)))) {
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdHat_" + hat.getKey(), hat.getKey(), theme.buttonLabel(),
                     index * (BUY_WIDTH + 8), row * ROW_HEIGHT - 4,
@@ -1256,34 +1296,49 @@ public final class SupporterPanel {
         tab = (TabContentBuilder) tab.addChild(line("WdPets",
                 "Pets — one follower at a time; they cannot fight", theme.heading(), row++));
         index = 0;
-        // A grid since 0.22.1: nine pets plus "no pet" stopped fitting one row.
-        for (String petName : SupporterCommand.PetSub.PETS.keySet()) {
+        // Eight per row at 106 wide since 0.22.3 (the tab bar's width — names all fit):
+        // sixteen buttons in two rows, which is what pulled the Wardrobe back inside the
+        // panel after the fifteen-pet catalogue pushed the skins rack out the bottom of it.
+        // "no pet" leads, then owned, then hidden.
+        tab = (TabContentBuilder) tab.addChild(wearButton(
+                "WdPet_off", "no pet", theme.buttonLabel(),
+                0, row * ROW_HEIGHT - 4, 106,
+                (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
+                        service, uuid, playerRef, null, world, ctx)));
+        index = 1;
+        for (java.util.Map.Entry<String, String> pet
+                : ownedFirst(SupporterCommand.PetSub.PETS,
+                        name -> service.ownsPet(uuid, name, plugin.config().petCost(name)))) {
+            String petName = pet.getKey();
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdPet_" + petName, petName, theme.buttonLabel(),
-                    (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
+                    (index % 8) * (106 + 8), (row + (index / 8)) * ROW_HEIGHT - 4, 106,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
                             service, uuid, playerRef, petName, world, ctx))
                     .withVisible(service.ownsPet(uuid, petName,
                             plugin.config().petCost(petName))));
             index++;
         }
-        tab = (TabContentBuilder) tab.addChild(wearButton(
-                "WdPet_off", "no pet", theme.buttonLabel(),
-                (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
-                (Void v, au.ellie.hyui.events.UIContext ctx) -> wearPet(
-                        service, uuid, playerRef, null, world, ctx)));
-        row += 4; // sixteen buttons, three grid rows since 0.22.2
+        row += 2;
 
-        // Tighter gap than the other sections: the rack is three rows deep and the panel
-        // notice line sits below the content area.
-        row--;
         tab = (TabContentBuilder) tab.addChild(line("WdSkins",
                 "Body skins — statue mode; stays on across relogs", theme.heading(), row++));
         index = 0;
         // Locked skins are hidden here, not advertised - the Wardrobe is what you own, the
         // Shop is what you could. Built-and-hidden rather than absent, so buying in the Shop
-        // reveals the button here without reopening the panel.
+        // reveals the button here without reopening the panel. Owned first, same as the racks.
+        List<String> skinRack = new ArrayList<>();
         for (String skinName : SkinChanger.allNames()) {
+            if (service.ownsSkin(uuid, skinName, skinCost(skinName))) {
+                skinRack.add(skinName);
+            }
+        }
+        for (String skinName : SkinChanger.allNames()) {
+            if (!service.ownsSkin(uuid, skinName, skinCost(skinName))) {
+                skinRack.add(skinName);
+            }
+        }
+        for (String skinName : skinRack) {
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdSkin_" + skinName, skinName, theme.buttonLabel(),
                     (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
@@ -1301,6 +1356,24 @@ public final class SupporterPanel {
         // three rows and pushed it into the panel notice line - the About tab carries the same
         // ground rules, and the notice line needs to stay clear for purchase feedback.
         return tab;
+    }
+
+    /** Catalogue entries reordered so owned (visible) buttons pack from the left. */
+    private static List<java.util.Map.Entry<String, String>> ownedFirst(
+            java.util.Map<String, String> catalogue,
+            java.util.function.Predicate<String> owned) {
+        List<java.util.Map.Entry<String, String>> out = new ArrayList<>();
+        for (java.util.Map.Entry<String, String> e : catalogue.entrySet()) {
+            if (owned.test(e.getKey())) {
+                out.add(e);
+            }
+        }
+        for (java.util.Map.Entry<String, String> e : catalogue.entrySet()) {
+            if (!owned.test(e.getKey())) {
+                out.add(e);
+            }
+        }
+        return out;
     }
 
     /** Skin buttons: persist the choice, then push the visual on the world thread. */

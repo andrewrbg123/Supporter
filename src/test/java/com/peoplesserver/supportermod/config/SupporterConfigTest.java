@@ -215,6 +215,13 @@ class SupporterConfigTest {
             assertTrue(petNames.contains(priced),
                     "priced pet '" + priced + "' is not in the catalogue - it would gate nothing");
         }
+        // The Shop's merged gear-and-pets grid routes each click by which catalogue the name
+        // belongs to, so a name in both would buy the wrong thing.
+        for (String petName : petNames) {
+            assertFalse(names.contains(petName),
+                    "'" + petName + "' is both gear and pet - the merged Shop grid would "
+                            + "route its clicks to the gear purchase");
+        }
     }
 
     @Test
