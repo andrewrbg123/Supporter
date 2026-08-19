@@ -13,24 +13,23 @@ import com.peoplesserver.supportermod.SupporterPlugin;
 /**
  * One-variable-at-a-time probe for the flat-fill primitive (0.23.1).
  *
- * <p><b>Why this exists.</b> 0.23.0 changed three things at once — a new texture path, area
- * slicing, and {@code setColor} — and the client responded by disconnecting: a property value
- * it cannot apply is fatal, not cosmetic. With a disconnect as the cost of each wrong guess,
- * guessing is exactly the wrong method. Each variant here changes ONE thing from a construct
- * already proven live, so whichever one drops the connection names the culprit precisely.
+ * <p><b>Why this exists.</b> Two builds were spent disconnecting the client with texture
+ * slicing before reading how HyUI's own {@code DefaultStyles} draws a flat surface: a patch
+ * style with a colour and no texture at all. Variant 1 is that primitive, and it is what the
+ * panel now uses; the other two exist so that if it somehow fails, the answer arrives in one
+ * more attempt rather than another round of guessing.
  *
- * <p>Run them in order and stop at the first that works — variant 1 is the full primitive the
- * redesign wants, and the rest exist only to bisect if it fails.
+ * <p>Each variant's swatch is the ONLY styled element in its panel, so a failure can belong to
+ * nothing else. A value the client cannot apply drops the player from the server, which is why
+ * these run one at a time and say so up front.
  */
 public final class FlatProbe {
 
     /** What each variant tests, shown in chat so the answer is legible without the source. */
     public static final String[] DESCRIPTIONS = {
-        "1  full primitive: CircularProgressBarMask + 8x8 area + border 0 + tint",
-        "2  same, WITHOUT the tint (isolates setColor)",
-        "3  same, WITHOUT the area slice (isolates setArea)",
-        "4  proven Popup.png nine-patch + tint only (isolates setColor on a known-good patch)",
-        "5  full primitive on the backup texture, WIPIcon.png",
+        "1  colour only, no texture - the primitive HyUI's own DefaultStyles uses",
+        "2  colour only with 8-digit alpha (#RRGGBBAA) - tests real transparency",
+        "3  proven Popup.png nine-patch, tinted - the fallback if colour-only fails",
     };
 
     private FlatProbe() {
@@ -47,22 +46,14 @@ public final class FlatProbe {
             FlatTheme theme = new FlatTheme(plugin.config().tagColorHex());
             String accent = theme.accent();
             HyUIPatchStyle style = switch (variant) {
-                case 1 -> theme.slice(FlatTheme.FILL_TEXTURE,
-                        FlatTheme.FILL_X, FlatTheme.FILL_Y, accent);
-                case 2 -> theme.slice(FlatTheme.FILL_TEXTURE,
-                        FlatTheme.FILL_X, FlatTheme.FILL_Y, null);
-                case 3 -> new HyUIPatchStyle()
-                        .setTexturePath(FlatTheme.FILL_TEXTURE)
-                        .setBorder(0)
-                        .setColor(accent);
+                case 1 -> new HyUIPatchStyle().setColor(accent);
+                case 2 -> new HyUIPatchStyle().setColor(FlatTheme.alpha(accent, 0.35));
                 // Popup.png with a border is exactly what the live panel draws every day, so
                 // this variant adds only the tint.
-                case 4 -> new HyUIPatchStyle()
-                        .setTexturePath("Common/Popup.png")
+                case 3 -> new HyUIPatchStyle()
+                        .setTexturePath(FlatTheme.PROBE_TEXTURE)
                         .setBorder(16)
                         .setColor(accent);
-                case 5 -> theme.slice(FlatTheme.FILL_TEXTURE_ALT,
-                        FlatTheme.FILL_ALT_X, FlatTheme.FILL_ALT_Y, accent);
                 default -> null;
             };
             if (style == null) {

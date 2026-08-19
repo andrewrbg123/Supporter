@@ -29,42 +29,22 @@ import au.ellie.hyui.builders.HyUIStyle;
 public final class FlatTheme {
 
     /**
-     * The fill texture, and the hard lesson behind this particular path.
-     *
-     * <p>0.23.0 pointed this at {@code Common/ColorPickerFill.png} and <b>the client
-     * disconnected</b>: "CustomUI Set command couldn't set value ... .Background". A texture
-     * the client cannot resolve does NOT degrade to an unstyled element — the property set
-     * fails, and a failed set drops the player out of the server. That correction matters more
-     * than the texture choice: <b>every texture path must be one that provably exists</b>,
-     * because the cost of a wrong one is a disconnect, not a blank box.
-     *
-     * <p>ColorPickerFill exists only as {@code @2x}; the paths this plugin has proven live
-     * (Popup, PopupTitle, Buttons/Secondary) are all base-named files under the client's
-     * {@code Common/UI/Custom/} root. {@code CircularProgressBarMask.png} is such a file, and
-     * it carries a solid 8x8 block of pure opaque white at (113,39) — verified pixel by pixel
-     * — which is all a stretched fill needs.
+     * A texture that exists, kept only for the probe's tinted-nine-patch variant. Nothing in
+     * the panel needs it: see {@link #fill}.
      */
-    public static final String FILL_TEXTURE = "Common/CircularProgressBarMask.png";
-
-    /** The solid-white block inside {@link #FILL_TEXTURE}. */
-    public static final int FILL_X = 113;
-    public static final int FILL_Y = 39;
-    public static final int FILL_SIZE = 8;
-
-    /** Same shape, in the backup texture — also base-named, also verified solid white. */
-    public static final String FILL_TEXTURE_ALT = "Common/WIPIcon.png";
-    public static final int FILL_ALT_X = 47;
-    public static final int FILL_ALT_Y = 90;
+    public static final String PROBE_TEXTURE = "Common/Popup.png";
 
     // --- palette (design tokens, pre-blended where the design used alpha) -----------------
 
+    // Surfaces are the design's own rgba() values, composited by the client over whatever sits
+    // behind them — only the panel itself is opaque.
     public static final String PANEL_BG = "#0C0E14";
-    public static final String RAIL_BG = "#13151B";
-    public static final String HAIRLINE = "#222429";
-    public static final String CARD_BG = "#101218";
-    public static final String CARD_BG_SOFT = "#0F1117";
-    public static final String CHIP_BG = "#111319";
-    public static final String CHIP_BORDER = "#1E2027";
+    public static final String RAIL_BG = "#FFFFFF07";      // white .028
+    public static final String HAIRLINE = "#FFFFFF17";     // white .09
+    public static final String CARD_BG = "#FFFFFF05";      // white .018
+    public static final String CARD_BG_SOFT = "#FFFFFF04"; // white .014
+    public static final String CHIP_BG = "#FFFFFF05";      // white .02
+    public static final String METER_TRACK = "#FFFFFF14";  // white .08
 
     public static final String INK_PRIMARY = "#F7F8FC";
     public static final String INK_BODY = "#E8EAF0";
@@ -83,11 +63,13 @@ public final class FlatTheme {
 
     public FlatTheme(String accentHex) {
         this.accent = accentHex == null || accentHex.isBlank() ? "#F0A93B" : accentHex.trim();
-        // The design's --acc-bright: the accent mixed 42% toward white.
+        // The design's --acc-bright: the accent mixed 42% toward white. This one really is a
+        // blend rather than an alpha — it is a text colour, and text must stay legible rather
+        // than fade into whatever is behind it.
         this.accentBright = mix(accent, "#FFFFFF", 0.42);
-        // Card wash and active-nav background: the accent at .10 / .12 over the panel.
-        this.accentWash = over(PANEL_BG, accent, 0.10);
-        this.accentNav = over(PANEL_BG, accent, 0.12);
+        // Card wash and active-nav background: the accent at .10 / .12, composited.
+        this.accentWash = alpha(accent, 0.10);
+        this.accentNav = alpha(accent, 0.12);
     }
 
     public String accent() {
@@ -108,24 +90,34 @@ public final class FlatTheme {
 
     // --- the primitive ---------------------------------------------------------------------
 
-    /** A solid rectangle of {@code hex}. The whole design is built out of these. */
+    /**
+     * A solid rectangle of {@code hex} — the primitive the whole design is built from.
+     *
+     * <p><b>A patch style with a colour and NO texture is the intended way to draw a flat
+     * surface</b>, and it was hiding in HyUI's own {@code DefaultStyles} the whole time:
+     * {@code new HyUIPatchStyle().setColor("#0a0f17")}, no texture, no border, no area. Two
+     * disconnects were spent slicing a white block out of a client texture to achieve what one
+     * call does natively — the lesson being that when an API looks like it lacks a primitive,
+     * read how its own defaults are built before inventing one.
+     *
+     * <p>{@code hex} may be {@code #RRGGBB} or {@code #RRGGBBAA}: DefaultStyles ships
+     * {@code #000000D1} and {@code #00000000}, so <b>alpha genuinely composites</b> and the
+     * design's {@code rgba()} surfaces port across as written rather than pre-blended.
+     */
     public HyUIPatchStyle fill(String hex) {
-        return slice(FILL_TEXTURE, FILL_X, FILL_Y, hex);
+        return new HyUIPatchStyle().setColor(hex);
     }
 
-    /**
-     * A tinted slice of a texture: the white block stretched over the element.
-     *
-     * <p>Border 0 means no nine-slice — there is nothing to preserve in a uniform block, and
-     * slicing an 8px region into corners would leave nothing for the centre.
-     */
-    public HyUIPatchStyle slice(String texturePath, int x, int y, String hex) {
-        HyUIPatchStyle style = new HyUIPatchStyle()
-                .setTexturePath(texturePath)
-                .setAreaX(x).setAreaY(y)
-                .setAreaWidth(FILL_SIZE).setAreaHeight(FILL_SIZE)
-                .setBorder(0);
-        return hex == null ? style : style.setColor(hex);
+    /** {@code hex} at {@code alpha} (0..1), as the 8-digit form the client accepts. */
+    public static String alpha(String hex, double alpha) {
+        int[] c = rgb(hex);
+        int a = clamp((int) Math.round(alpha * 255));
+        return String.format("#%02X%02X%02X%02X", c[0], c[1], c[2], a);
+    }
+
+    /** White at {@code alpha} — the design's {@code rgba(255,255,255,x)} surfaces. */
+    public static String white(double alpha) {
+        return alpha("#FFFFFF", alpha);
     }
 
     // --- colour maths ----------------------------------------------------------------------

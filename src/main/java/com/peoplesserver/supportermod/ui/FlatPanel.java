@@ -123,7 +123,8 @@ public final class FlatPanel {
         int remaining = (int) Math.max(0L, service.daysRemaining(uuid));
         int span = Math.max(90, remaining);
         int fillW = Math.max(2, Math.round(192f * remaining / span));
-        rail = (GroupBuilder) rail.addChild(box("FlatMeterTrack", "#26282E", 22, 94, 192, 4));
+        rail = (GroupBuilder) rail.addChild(
+                box("FlatMeterTrack", FlatTheme.METER_TRACK, 22, 94, 192, 4));
         if (remaining > 0) {
             rail = (GroupBuilder) rail.addChild(
                     box("FlatMeterFill", theme.accent(), 22, 94, fillW, 4));
@@ -140,7 +141,7 @@ public final class FlatPanel {
                         box("FlatNavBg" + i, theme.accentNav(), 12, y, 212, 32));
             }
             rail = (GroupBuilder) rail.addChild(box("FlatNavMark" + i,
-                    selected ? theme.accent() : "#2B2D33", 22, y + 13, 5, 5));
+                    selected ? theme.accent() : FlatTheme.white(0.16), 22, y + 13, 5, 5));
             rail = (GroupBuilder) rail.addChild(text("FlatNav" + i, NAV[i],
                     theme.navLabel(selected), y + 7, 38, 170, 20));
         }
