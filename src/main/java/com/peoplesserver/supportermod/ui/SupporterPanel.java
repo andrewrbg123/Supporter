@@ -1338,23 +1338,24 @@ public final class SupporterPanel {
                 skinRack.add(skinName);
             }
         }
+        // Eight per row at 106, "off" leading — the same shape as the pets rack, and for the
+        // same reason: thirteen skins plus "off" is fourteen buttons, which at six columns
+        // made a third row and pushed "off" out the bottom of the panel (the live report).
+        tab = (TabContentBuilder) tab.addChild(wearButton(
+                "WdSkin_off", "off", theme.buttonLabel(),
+                0, row * ROW_HEIGHT - 4, 106,
+                (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
+                        service, uuid, playerRef, null, world, ctx)));
+        index = 1;
         for (String skinName : skinRack) {
             tab = (TabContentBuilder) tab.addChild(wearButton(
                     "WdSkin_" + skinName, skinName, theme.buttonLabel(),
-                    (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
+                    (index % 8) * (106 + 8), (row + (index / 8)) * ROW_HEIGHT - 4, 106,
                     (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
                             service, uuid, playerRef, skinName, world, ctx))
                     .withVisible(service.ownsSkin(uuid, skinName, skinCost(skinName))));
             index++;
         }
-        tab = (TabContentBuilder) tab.addChild(wearButton(
-                "WdSkin_off", "off", theme.buttonLabel(),
-                (index % 6) * (BUY_WIDTH + 8), (row + (index / 6)) * ROW_HEIGHT - 4,
-                (Void v, au.ellie.hyui.events.UIContext ctx) -> setSkin(
-                        service, uuid, playerRef, null, world, ctx)));
-        // The cosmetic disclaimer that used to sit here was cut when the skin rack grew to
-        // three rows and pushed it into the panel notice line - the About tab carries the same
-        // ground rules, and the notice line needs to stay clear for purchase feedback.
         return tab;
     }
 
