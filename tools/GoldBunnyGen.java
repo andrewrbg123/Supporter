@@ -36,8 +36,8 @@ import javax.imageio.ImageIO;
  * face / nose        x40..47  y39..47
  * underside          x0..37   y28..56, x0..20 y62..79, x34..82 y76..95
  * flank pale         x95..110 y41..55
- * second inner ear   x83..91  y73..94
- * paw pads           x116..125 y78..87
+ * second inner ear   x83..91  y73..88
+ * (four smaller pink patches were dropped in 0.29.2 - see ROSE_PARTS)
  * </pre>
  */
 public final class GoldBunnyGen {
@@ -53,7 +53,7 @@ public final class GoldBunnyGen {
     /** Pale champagne for the underside — still gold, just lifted. */
     private static final Color CHAMPAGNE = new Color(0xFF, 0xEE, 0xC4);
     private static final Color CHAMPAGNE_DEEP = new Color(0xE6, 0xCE, 0x9A);
-    /** Rose gold for inner ears, nose and pads. */
+    /** Rose gold for the inner ears. */
     private static final Color ROSE = new Color(0xE8, 0x9C, 0x86);
     private static final Color ROSE_DEEP = new Color(0xC2, 0x74, 0x5E);
     /** Dark bronze: eyes and the tipping on the ears. */
@@ -64,9 +64,19 @@ public final class GoldBunnyGen {
     private static final int[][] UNDERSIDE = {
         {0, 28, 38, 29}, {0, 62, 21, 18}, {34, 76, 49, 20}, {95, 41, 16, 15}, {47, 87, 55, 9},
     };
+    /**
+     * ONLY the two inner ears (0.29.2). The class map found six pink regions and the first
+     * build painted all of them, on the assumption they were ears, nose and paw pads. Four
+     * were small and speculative, and at least one landed on the chest — where a filled
+     * rectangle reads as a printed pink bib with hard edges rather than as a marking.
+     *
+     * <p>The lesson is about what a region map does and does not tell you: it says WHERE the
+     * sheet keeps a colour, never WHAT that patch is on the animal. The two big regions are
+     * unambiguous because a rabbit has two ears and these are the only two patches large
+     * enough to be them. Everything smaller was a guess dressed up as data, so it is gone.
+     */
     private static final int[][] ROSE_PARTS = {
-        {43, 4, 7, 16}, {38, 4, 3, 6}, {83, 73, 9, 16}, {82, 89, 10, 6},
-        {116, 78, 10, 10}, {3, 46, 6, 10},
+        {43, 4, 7, 16}, {83, 73, 9, 16},
     };
     private static final int[][] EAR_TIPS = {
         {44, 0, 3, 8}, {52, 0, 7, 8},
@@ -124,7 +134,7 @@ public final class GoldBunnyGen {
             }
         }
 
-        // Inner ears, nose and pads: rose gold, darker toward the edges of each patch so they
+        // Inner ears: rose gold, darker toward the edges of each patch so they
         // read as recessed rather than painted on.
         for (int[] r : ROSE_PARTS) {
             for (int y = r[1]; y < Math.min(H, r[1] + r[3]); y++) {
