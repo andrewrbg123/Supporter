@@ -4,6 +4,10 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Rotation3f;
+import com.hypixel.hytale.protocol.AnimationSlot;
+import com.hypixel.hytale.protocol.InteractionType;
+import com.hypixel.hytale.server.core.entity.UUIDComponent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.modules.entity.DespawnComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -14,6 +18,7 @@ import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.SupporterService;
+import com.peoplesserver.supportermod.platform.Messenger;
 import com.peoplesserver.supportermod.platform.PluginLog;
 import java.util.Collection;
 import java.util.HashMap;
@@ -99,14 +104,16 @@ public final class PetSystem {
     private final Map<String, String> catalogue;
     /** Server-wide live-pet cap, read from config each time so a config edit applies live. */
     private final IntSupplier cap;
+    private final Messenger messenger;
     private final PluginLog log;
     private volatile long lastWarnAt;
 
     public PetSystem(SupporterService service, Map<String, String> catalogue, IntSupplier cap,
-                     PluginLog log) {
+                     Messenger messenger, PluginLog log) {
         this.service = service;
         this.catalogue = catalogue;
         this.cap = cap;
+        this.messenger = messenger;
         this.log = log;
     }
 
@@ -146,6 +153,60 @@ public final class PetSystem {
         return null;
     }
 
+    /**
+     * Puts the owner's pet into a mode, or cycles to the next one when {@code wanted} is null.
+     *
+     * <p>World thread only — it reads the pet's position and may play an animation.
+     *
+     * @return the resulting mode, or null if the player has no live pet here
+     */
+    public PetMode setMode(UUID ownerUuid, PetMode wanted, Store<EntityStore> store) {
+        Pet pet = pets.get(ownerUuid);
+        if (pet == null || !pet.ref.isValid()) {
+            return null;
+        }
+        PetMode mode = wanted != null ? wanted : pet.mode.next();
+        pet.mode = mode;
+        if (mode == PetMode.FOLLOW) {
+            pet.holdAt = null;
+        } else {
+            // Hold exactly where it is standing now, not where the owner is — "stay" means
+            // here, and a pet that trotted to the owner first would be obeying the wrong word.
+            TransformComponent tc =
+                    store.getComponent(pet.ref, TransformComponent.getComponentType());
+            if (tc != null && tc.getPosition() != null) {
+                pet.holdAt = new Vector3d(tc.getPosition());
+            }
+        }
+        if (mode == PetMode.SIT) {
+            playSit(pet, store);
+        }
+        return mode;
+    }
+
+    /** The mode the owner's pet is in, or null if they have none out. */
+    public PetMode modeOf(UUID ownerUuid) {
+        Pet pet = pets.get(ownerUuid);
+        return pet == null ? null : pet.mode;
+    }
+
+    /**
+     * Plays the lying-down animation. Every creature this plugin uses as a pet inherits the
+     * vanilla {@code Laydown} set from its model asset, so this is one call rather than a table
+     * of per-species animation names — and a species that somehow lacks it simply does not
+     * animate, which is why the failure is swallowed rather than reported.
+     */
+    private void playSit(Pet pet, Store<EntityStore> store) {
+        try {
+            NPCEntity npc = store.getComponent(pet.ref, NPCEntity.getComponentType());
+            if (npc != null) {
+                npc.playAnimation(pet.ref, AnimationSlot.Movement, "Laydown", store);
+            }
+        } catch (Throwable t) {
+            warnOccasionally("Pet sit animation failed", t);
+        }
+    }
+
     /** Removes the owner's pet if it lives in this store. Owner's world thread. */
     public boolean removeFor(UUID ownerUuid, Store<EntityStore> store) {
         Pet pet = pets.get(ownerUuid);
@@ -167,6 +228,52 @@ public final class PetSystem {
 
     public boolean hasPet(UUID ownerUuid) {
         return pets.containsKey(ownerUuid);
+    }
+
+    /**
+     * Right-click your own pet to cycle follow → stay → sit.
+     *
+     * <p>Registered on {@code PlayerInteractEvent}. Three deliberate restrictions: only
+     * SECONDARY-style interactions, so hitting a pet is still hitting it and not a command;
+     * only the interacting player's OWN pet, so nobody can park somebody else's companion; and
+     * the event is never cancelled, because this reads an interaction rather than replacing
+     * one — anything else the click would have done still happens.
+     */
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        try {
+            if (event.isCancelled()) {
+                return;
+            }
+            InteractionType type = event.getActionType();
+            if (type != InteractionType.Secondary && type != InteractionType.Use) {
+                return;
+            }
+            Ref<EntityStore> target = event.getTargetRef();
+            if (target == null || !target.isValid()) {
+                return;
+            }
+            Ref<EntityStore> playerRef = event.getPlayerRef();
+            Store<EntityStore> store = playerRef == null ? null : playerRef.getStore();
+            if (store == null) {
+                return;
+            }
+            UUIDComponent uc = store.getComponent(playerRef, UUIDComponent.getComponentType());
+            UUID uuid = uc == null ? null : uc.getUuid();
+            if (uuid == null) {
+                return;
+            }
+            Pet pet = pets.get(uuid);
+            if (pet == null || !pet.ref.equals(target)) {
+                return; // not their pet, or not a pet at all
+            }
+            PetMode mode = setMode(uuid, null, store);
+            if (mode != null) {
+                messenger.send(uuid, "Your pet is now " + mode.describe() + ".");
+            }
+        } catch (Throwable t) {
+            // An interaction handler must never cost somebody their click.
+            warnOccasionally("Pet interaction failed", t);
+        }
     }
 
     /** Called from the scheduler thread. Does no world work itself. */
@@ -257,6 +364,16 @@ public final class PetSystem {
                     continue;
                 }
 
+                // A pet told to stay or sit holds its own spot instead of chasing: the follow
+                // target becomes where it was left, so the engine's A* keeps it there rather
+                // than the plugin having to fight the role's own seek behaviour.
+                if (pet.mode != PetMode.FOLLOW) {
+                    if (pet.holdAt != null) {
+                        stamp(store, pet.ref, pet.holdAt);
+                    }
+                    continue;
+                }
+
                 TransformComponent petTc =
                         store.getComponent(pet.ref, TransformComponent.getComponentType());
                 Vector3d petPos = petTc == null || petTc.getPosition() == null
@@ -276,7 +393,9 @@ public final class PetSystem {
                         pets.remove(entry.getKey());
                         continue;
                     }
-                    pet = new Pet(pet.role, pair.left());
+                    Pet replacement = new Pet(pet.role, pair.left());
+                    replacement.mode = pet.mode;
+                    pet = replacement;
                     pets.put(entry.getKey(), pet);
                 }
                 stamp(store, pet.ref, ownerPos);
@@ -452,5 +571,50 @@ public final class PetSystem {
         log.error(message, t);
     }
 
-    private record Pet(String role, Ref<EntityStore> ref) {}
+    /**
+     * What a pet is doing. Session-only and deliberately so: a pet is removed when its owner
+     * leaves the world, so there is nothing to restore at login and a returning player always
+     * gets their companion back at heel rather than parked wherever they left it a week ago.
+     */
+    public enum PetMode {
+        /** Walks after the owner. The default, and what every pet does when it spawns. */
+        FOLLOW,
+        /** Holds position where it was told to stay. */
+        STAY,
+        /** Holds position and lies down. */
+        SIT;
+
+        public PetMode next() {
+            return switch (this) {
+                case FOLLOW -> STAY;
+                case STAY -> SIT;
+                case SIT -> FOLLOW;
+            };
+        }
+
+        public String describe() {
+            return switch (this) {
+                case FOLLOW -> "following you";
+                case STAY -> "staying here";
+                case SIT -> "sitting";
+            };
+        }
+    }
+
+    /**
+     * Mutable rather than a record: the mode and the spot a pet was told to hold change over
+     * its life, and the tick rewrites them in place every second.
+     */
+    private static final class Pet {
+        final String role;
+        Ref<EntityStore> ref;
+        PetMode mode = PetMode.FOLLOW;
+        /** Where a STAY or SIT pet is holding. Null while following. */
+        Vector3d holdAt;
+
+        Pet(String role, Ref<EntityStore> ref) {
+            this.role = role;
+            this.ref = ref;
+        }
+    }
 }

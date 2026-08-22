@@ -1240,6 +1240,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                     + " - cosmetic followers. They cannot fight, for you or anyone.");
             info(ctx, "/supporter pet <name> to bring one out; /supporter pet off sends it "
                     + "home. It follows you and stays across relogs.");
+            info(ctx, "Right-click your pet - or /supporter pet sit, stay or follow - to tell "
+                    + "it what to do.");
         }
     }
 
@@ -1277,6 +1279,31 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 ok(ctx, "Pet sent home.");
                 return;
             }
+            // sit / stay / follow are commands to the pet you already have out, not pets to
+            // bring out — the chat path to the same thing right-clicking it does, and the one
+            // that still works if a click ever fails to register.
+            com.peoplesserver.supportermod.platform.hytale.PetSystem.PetMode wanted =
+                    switch (name) {
+                        case "sit" ->
+                            com.peoplesserver.supportermod.platform.hytale.PetSystem
+                                    .PetMode.SIT;
+                        case "stay" ->
+                            com.peoplesserver.supportermod.platform.hytale.PetSystem
+                                    .PetMode.STAY;
+                        case "follow", "heel" ->
+                            com.peoplesserver.supportermod.platform.hytale.PetSystem
+                                    .PetMode.FOLLOW;
+                        default -> null;
+                    };
+            if (wanted != null) {
+                var mode = pets.setMode(uuid, wanted, store);
+                if (mode == null) {
+                    err(ctx, "You have no pet out. /supporter pet <name> brings one.");
+                } else {
+                    ok(ctx, "Your pet is now " + mode.describe() + ".");
+                }
+                return;
+            }
             if (!service.isSupporter(uuid)) {
                 err(ctx, "Pets are a supporter perk. /supporter info to find out more.");
                 return;
@@ -1306,7 +1333,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 return;
             }
             ok(ctx, "Pet out: " + name + "! It follows you and stays across relogs.");
-            info(ctx, "/supporter pet off sends it home.");
+            info(ctx, "Right-click it to cycle follow, stay and sit. /supporter pet off sends "
+                    + "it home.");
         }
     }
 

@@ -214,7 +214,7 @@ public final class SupporterPlugin extends JavaPlugin {
             // the orphan cleanup; the catalogue is PetSub's map, one source of truth.
             this.petSystem = new PetSystem(service,
                     com.peoplesserver.supportermod.command.SupporterCommand.PetSub.PETS,
-                    config::maxConcurrentPets, log);
+                    config::maxConcurrentPets, messenger, log);
             this.petTask = scheduler.scheduleRepeating(petSystem::tick, 1_000L, 1_000L);
 
             // 0.21.0: quests. The minute tick is EXACTLY 60s — each firing credits one minute
@@ -227,6 +227,11 @@ public final class SupporterPlugin extends JavaPlugin {
                     questTracker::sampleTick, 10_000L, 10_000L);
             getEventRegistry().registerGlobal(
                     PlayerChatEvent.class, questTracker::onPlayerChat);
+
+            // Right-click your own pet to cycle follow -> stay -> sit.
+            getEventRegistry().registerGlobal(
+                    com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent.class,
+                    petSystem::onPlayerInteract);
 
             log.info("Ready — grace " + config.graceDays() + "d, reconcile at "
                     + config.reconcileHourUtc() + ":00 UTC, trails every " + trailMs + "ms "
