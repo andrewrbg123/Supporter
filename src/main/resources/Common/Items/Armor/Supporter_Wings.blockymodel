@@ -23,7 +23,7 @@
           "id": "2",
           "name": "WingL_S1",
           "position": {"x": -7, "y": -6, "z": -10},
-          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "orientation": {"x": -0.0872, "y": 0, "z": 0, "w": 0.9962},
           "shape": {
             "type": "box",
             "offset": {"x": 0, "y": 0, "z": 0},
@@ -50,7 +50,7 @@
               "id": "3",
               "name": "WingL_S2",
               "position": {"x": -11, "y": 7, "z": -2},
-              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "orientation": {"x": 0, "y": -0.1219, "z": 0, "w": 0.9925},
               "shape": {
                 "type": "box",
                 "offset": {"x": 0, "y": 0, "z": 0},
@@ -77,7 +77,7 @@
                   "id": "4",
                   "name": "WingL_S3",
                   "position": {"x": -9, "y": 7, "z": -2},
-                  "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+                  "orientation": {"x": 0, "y": -0.1219, "z": 0, "w": 0.9925},
                   "shape": {
                     "type": "box",
                     "offset": {"x": 0, "y": 0, "z": 0},
@@ -104,7 +104,7 @@
                       "id": "5",
                       "name": "WingL_S4",
                       "position": {"x": -6, "y": 6, "z": -2},
-                      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+                      "orientation": {"x": 0, "y": -0.1219, "z": 0, "w": 0.9925},
                       "shape": {
                         "type": "box",
                         "offset": {"x": 0, "y": 0, "z": 0},
@@ -138,7 +138,7 @@
           "id": "6",
           "name": "WingR_S1",
           "position": {"x": 7, "y": -6, "z": -10},
-          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "orientation": {"x": -0.0872, "y": 0, "z": 0, "w": 0.9962},
           "shape": {
             "type": "box",
             "offset": {"x": 0, "y": 0, "z": 0},
@@ -165,7 +165,7 @@
               "id": "7",
               "name": "WingR_S2",
               "position": {"x": 11, "y": 7, "z": -2},
-              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "orientation": {"x": 0, "y": 0.1219, "z": 0, "w": 0.9925},
               "shape": {
                 "type": "box",
                 "offset": {"x": 0, "y": 0, "z": 0},
@@ -192,7 +192,7 @@
                   "id": "8",
                   "name": "WingR_S3",
                   "position": {"x": 9, "y": 7, "z": -2},
-                  "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+                  "orientation": {"x": 0, "y": 0.1219, "z": 0, "w": 0.9925},
                   "shape": {
                     "type": "box",
                     "offset": {"x": 0, "y": 0, "z": 0},
@@ -219,7 +219,7 @@
                       "id": "9",
                       "name": "WingR_S4",
                       "position": {"x": 6, "y": 6, "z": -2},
-                      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+                      "orientation": {"x": 0, "y": 0.1219, "z": 0, "w": 0.9925},
                       "shape": {
                         "type": "box",
                         "offset": {"x": 0, "y": 0, "z": 0},

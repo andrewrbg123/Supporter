@@ -13,14 +13,14 @@ import javax.imageio.ImageIO;
  * <p>Four nested segments per wing, each stepping further out, back and up than its parent, so
  * the sweep accumulates down the wing.
  *
- * <p><b>NO ROTATION, and that is the correction of 0.27.2.</b> 0.27.0 angled each segment with
- * an {@code orientation} quaternion and mirrored the sign for the opposite wing, on the
- * assumption that mirroring a rotation mirrors the sweep. In game one wing swept back and the
- * other did not — from behind, one showed as a broad panel and the other as narrow stripes.
- * The sweep is now built from POSITION alone: each segment steps back in z as it steps out in
- * x, which is mirror-symmetric by construction and cannot disagree between the two sides.
- * Rotation is still available and still worth using — but it needs its handedness established
- * by a probe that can tell the two directions apart, not assumed from the sign.
+ * <p><b>ROTATION, split by axis (0.28.0).</b> 0.27.0 angled every segment about Y and mirrored
+ * the sign for the opposite wing; one side swept back and the other did not, so 0.27.2 removed
+ * rotation entirely and built the sweep from position. It is back now, split by axis, because
+ * the two axes behave DIFFERENTLY under mirroring: reflecting through the YZ plane leaves an
+ * X-axis rotation unchanged but flips the sign of a Y-axis one. So the backward lean (X) uses
+ * the SAME quaternion on both wings and has no handedness to get wrong, while the outward sweep
+ * (Y) is the mirrored pair. Position still carries the arc, so a wrong sign would tilt the wings
+ * rather than break them.
  *
  * <p><b>Tuned three times against live looks.</b> First they read as ears: too small, anchored
  * at head height. The anchor dropped to y-8 (y-12 in 0.27.1 was then too LOW, sitting at the
