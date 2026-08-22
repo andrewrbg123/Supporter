@@ -69,19 +69,30 @@ public final class PetSystem {
     private final Map<UUID, Pet> pets = new ConcurrentHashMap<>();
 
     /**
-     * Worlds already swept for strays this session, by name.
+     * The restart duplicate, and why it took three attempts to kill.
      *
-     * <p><b>The restart duplicate came from here.</b> A pet that outlives the server — a crash,
-     * a kill -9, a shutdown removal that silently failed, or simply an unloaded chunk — is
-     * still in the world when the server comes back, but the tracking map is empty, so the
-     * auto-spawn happily adds a second one and the owner ends up with two. The despawn timer
-     * cannot save it either: the component does not come back with a persisted entity.
+     * <p>A pet that outlives the server is still standing in the world when it comes back,
+     * while the tracking map starts empty — so the auto-spawn gives the owner a second one.
+     * Two separate things allow it, and both are confirmed from live logs:
      *
-     * <p>So the first tick in each world sweeps every {@code SupporterPet_} NPC it can find and
-     * removes the ones nothing is tracking. At boot that is all of them, which is correct — no
-     * pet legitimately exists before a player has logged in and been given one.
+     * <ul>
+     *   <li><b>Shutdown removes nothing.</b> "Pet shutdown: removed 0 pet(s)" was logged with a
+     *       pet plainly live in the world, so by the time a plugin stops, its entity refs are
+     *       already dead or the stores are gone. Synchronous removal was not enough.
+     *   <li><b>A boot sweep is too early.</b> Entities in UNLOADED CHUNKS do not exist in the
+     *       ECS, and seconds after startup — before anyone logs in — the leftover's chunk is
+     *       not loaded. The sweep dutifully found nothing.
+     * </ul>
+     *
+     * <p>So the sweep runs where the entity is actually visible: immediately before spawning a
+     * pet for a player, which is exactly when their chunks are loaded, plus a slow periodic
+     * pass for anything that loads later. Sweeping cannot rely on us knowing a pet exists, and
+     * it cannot run before the world does.
      */
-    private final java.util.Set<String> sweptWorlds = ConcurrentHashMap.newKeySet();
+    private static final long SWEEP_INTERVAL_MS = 60_000;
+
+    /** World name → when it was last swept. */
+    private final Map<String, Long> lastSweepAt = new ConcurrentHashMap<>();
 
     private final SupporterService service;
     /** Pet name → role name; the command layer's catalogue, shared not copied. */
@@ -186,14 +197,19 @@ public final class PetSystem {
             if (store == null) {
                 return;
             }
-            // Before anything else, and once per world: clear pets left over from a previous
-            // life of the server. Doing it here rather than at setup is deliberate — worlds do
-            // not exist yet when the plugin starts, and this tick is the first moment one is
-            // reliably loaded and on its own thread.
-            if (sweptWorlds.add(world.getName())) {
+            // A periodic sweep, not just one at boot. The boot-only version missed the very
+            // case it was written for: it runs seconds after startup, before anybody has
+            // logged in, so the leftover pet's chunk is not loaded and the ECS cannot see it.
+            // Entities in unloaded chunks are invisible to a sweep — the only reliable moment
+            // is once the owner is actually there, which is what the pre-spawn sweep below
+            // covers, with this as the slow backstop for strays that load later.
+            long now = System.currentTimeMillis();
+            Long last = lastSweepAt.get(world.getName());
+            if (last == null || now - last >= SWEEP_INTERVAL_MS) {
+                lastSweepAt.put(world.getName(), now);
                 int strays = sweepStrays(world, store);
                 if (strays > 0) {
-                    log.info("Pet boot sweep removed " + strays + " leftover pet(s) in "
+                    log.info("Pet sweep removed " + strays + " stray pet(s) in "
                             + world.getName());
                 }
             }
@@ -272,6 +288,7 @@ public final class PetSystem {
             // ownership: a stored choice keeps working, the same grandfathering rule as the
             // skins. Entitlement IS checked — a lapsed supporter's pet stays stored but stops
             // spawning, like every perk.
+            Map<UUID, String> toSpawn = new HashMap<>();
             for (Map.Entry<UUID, Vector3d> player : playersHere.entrySet()) {
                 if (pets.containsKey(player.getKey())) {
                     continue;
@@ -284,10 +301,30 @@ public final class PetSystem {
                 if (role == null) {
                     continue; // name left the catalogue; ignored, not an error
                 }
+                toSpawn.put(player.getKey(), role);
+            }
+
+            // THE SWEEP THAT ACTUALLY CATCHES THE RESTART DUPLICATE. A player who needs a pet
+            // has just arrived, which means their chunks have just loaded, which means a pet
+            // left there by a previous life of the server is finally visible to the ECS —
+            // this instant, and not a moment before it. Sweeping here, immediately before
+            // spawning, is what stops the leftover and the newcomer standing side by side.
+            if (!toSpawn.isEmpty()) {
+                int strays = sweepStrays(world, store);
+                if (strays > 0) {
+                    log.info("Pet pre-spawn sweep removed " + strays + " leftover pet(s) in "
+                            + world.getName());
+                }
+            }
+
+            for (Map.Entry<UUID, String> entry : toSpawn.entrySet()) {
                 if (pets.size() >= cap.getAsInt()) {
                     break; // at the server-wide cap; try again next tick
                 }
-                spawn(store, player.getKey(), player.getValue(), role);
+                Vector3d at = playersHere.get(entry.getKey());
+                if (at != null) {
+                    spawn(store, entry.getKey(), at, entry.getValue());
+                }
             }
         } catch (Throwable t) {
             warnOccasionally("Pet tickWorld failed", t);
@@ -379,21 +416,31 @@ public final class PetSystem {
      * which is what makes the direct store access safe.
      */
     public void removeAllSync() {
+        int tracked = pets.size();
         int removed = 0;
+        int unreachable = 0;
         for (Map.Entry<UUID, Pet> entry : pets.entrySet()) {
             try {
                 Ref<EntityStore> ref = entry.getValue().ref;
                 if (ref.isValid() && ref.getStore() != null) {
                     ref.getStore().removeEntity(ref, RemoveReason.REMOVE);
                     removed++;
+                } else {
+                    unreachable++;
                 }
             } catch (Throwable t) {
+                unreachable++;
                 log.warn("Pet shutdown removal failed for " + entry.getKey() + ": " + t);
             }
         }
         pets.clear();
-        // This line's ABSENCE from a shutdown log is the leak detector.
-        log.info("Pet shutdown: removed " + removed + " pet(s)");
+        // Report all three numbers, because "removed 0" was ambiguous exactly when it mattered:
+        // it appeared with a pet plainly live in the world, and could not distinguish "nothing
+        // was tracked" from "everything tracked was already unreachable". Any pet counted as
+        // unreachable here is one the next session's sweep will have to collect.
+        log.info("Pet shutdown: tracked " + tracked + ", removed " + removed
+                + ", unreachable " + unreachable
+                + (unreachable > 0 ? " (the next session sweeps those)" : ""));
     }
 
     private void warnOccasionally(String message, Throwable t) {
