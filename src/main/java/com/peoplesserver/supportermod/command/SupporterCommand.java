@@ -1450,13 +1450,39 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      */
     public static final class PettestSub extends AbstractPlayerCommand {
 
+        /**
+         * Roles that exist in the asset pack but are NOT yet in {@link PetSub#PETS} — spike
+         * candidates, reachable by pettest and by nothing else.
+         *
+         * <p>Deliberately separate from the real catalogue: a role whose appearance fails to
+         * resolve still passes {@code hasRoleName} and only fails when something tries to spawn
+         * it, so an unproven pet listed in the Shop would be an item a player could buy and
+         * then not receive. It earns a PETS entry by rendering.
+         */
+        public static final java.util.Map<String, String> CANDIDATES =
+                new java.util.LinkedHashMap<>();
+
+        static {
+            // 0.29.0 spike: does the model-asset loader scan plugin packs? This role's
+            // appearance is ours (Server/Models/Supporter/), pointing at vanilla bunny
+            // geometry and animations with our own texture.
+            CANDIDATES.put("goldbunny", "SupporterPet_GoldBunny");
+        }
+
+        /** The real catalogue plus the spike candidates. */
+        static java.util.Map<String, String> testable() {
+            java.util.Map<String, String> out = new java.util.LinkedHashMap<>(PetSub.PETS);
+            out.putAll(CANDIDATES);
+            return out;
+        }
+
         private final SupporterPlugin plugin;
         private final Argument petArg;
 
         @SuppressWarnings({"unchecked", "rawtypes"})
         public PettestSub(SupporterPlugin plugin) {
             super("pettest", "ADMIN rig vetting: spawn a follower pet - <"
-                    + String.join("|", PetSub.PETS.keySet()) + "|off>");
+                    + String.join("|", testable().keySet()) + "|off>");
             setPermissionGroup(GameMode.Creative);
             this.plugin = plugin;
             this.petArg = withRequiredArg("pet", "pet name, or off",
@@ -1478,9 +1504,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                         ? "Pet removed." : "You have no pet out.");
                 return;
             }
-            String role = PetSub.PETS.get(name);
+            String role = testable().get(name);
             if (role == null) {
-                err(ctx, "No such pet. Choose from: " + String.join(", ", PetSub.PETS.keySet())
+                err(ctx, "No such pet. Choose from: " + String.join(", ", testable().keySet())
                         + " — or off.");
                 return;
             }
