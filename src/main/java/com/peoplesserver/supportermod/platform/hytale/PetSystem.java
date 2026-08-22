@@ -62,8 +62,26 @@ public final class PetSystem {
      */
     private static final long DESPAWN_TTL_SECONDS = 120;
 
+    /** Every pet role this plugin spawns shares this prefix, which is what makes a sweep possible. */
+    private static final String ROLE_PREFIX = "SupporterPet_";
+
     /** Owner uuid → live pet. */
     private final Map<UUID, Pet> pets = new ConcurrentHashMap<>();
+
+    /**
+     * Worlds already swept for strays this session, by name.
+     *
+     * <p><b>The restart duplicate came from here.</b> A pet that outlives the server — a crash,
+     * a kill -9, a shutdown removal that silently failed, or simply an unloaded chunk — is
+     * still in the world when the server comes back, but the tracking map is empty, so the
+     * auto-spawn happily adds a second one and the owner ends up with two. The despawn timer
+     * cannot save it either: the component does not come back with a persisted entity.
+     *
+     * <p>So the first tick in each world sweeps every {@code SupporterPet_} NPC it can find and
+     * removes the ones nothing is tracking. At boot that is all of them, which is correct — no
+     * pet legitimately exists before a player has logged in and been given one.
+     */
+    private final java.util.Set<String> sweptWorlds = ConcurrentHashMap.newKeySet();
 
     private final SupporterService service;
     /** Pet name → role name; the command layer's catalogue, shared not copied. */
@@ -168,6 +186,17 @@ public final class PetSystem {
             if (store == null) {
                 return;
             }
+            // Before anything else, and once per world: clear pets left over from a previous
+            // life of the server. Doing it here rather than at setup is deliberate — worlds do
+            // not exist yet when the plugin starts, and this tick is the first moment one is
+            // reliably loaded and on its own thread.
+            if (sweptWorlds.add(world.getName())) {
+                int strays = sweepStrays(world, store);
+                if (strays > 0) {
+                    log.info("Pet boot sweep removed " + strays + " leftover pet(s) in "
+                            + world.getName());
+                }
+            }
             Map<UUID, Vector3d> playersHere = new HashMap<>();
             Collection<PlayerRef> players = world.getPlayerRefs();
             if (players != null) {
@@ -263,6 +292,64 @@ public final class PetSystem {
         } catch (Throwable t) {
             warnOccasionally("Pet tickWorld failed", t);
         }
+    }
+
+    /**
+     * Removes every {@code SupporterPet_} NPC in this world that the plugin is not tracking.
+     *
+     * <p>This is the backstop the UUID bookkeeping could never be: it does not care how a pet
+     * came to exist or whether we ever knew about it — it walks the world's entities, finds
+     * anything wearing one of our roles, and removes what nothing owns. That covers pets left
+     * by a previous server life, by a failed removal, or by a bug not yet written.
+     *
+     * <p>Tracked pets are skipped by reference, so this is safe to run at any moment: a live
+     * pet belonging to an online player is never touched.
+     *
+     * <p>World thread only — it reads components and removes entities.
+     *
+     * @return how many were removed
+     */
+    public int sweepStrays(World world, Store<EntityStore> store) {
+        java.util.List<Ref<EntityStore>> doomed = new java.util.ArrayList<>();
+        java.util.Set<Ref<EntityStore>> tracked = new java.util.HashSet<>();
+        for (Pet pet : pets.values()) {
+            tracked.add(pet.ref);
+        }
+        try {
+            store.forEachChunk((chunk, commands) -> {
+                for (int i = 0; i < chunk.size(); i++) {
+                    NPCEntity npc = chunk.getComponent(i, NPCEntity.getComponentType());
+                    if (npc == null) {
+                        continue;
+                    }
+                    String role = npc.getRoleName();
+                    if (role == null || !role.startsWith(ROLE_PREFIX)) {
+                        continue;
+                    }
+                    Ref<EntityStore> ref = chunk.getReferenceTo(i);
+                    if (ref != null && !tracked.contains(ref)) {
+                        doomed.add(ref);
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            warnOccasionally("Pet sweep scan failed in " + world.getName(), t);
+            return 0;
+        }
+        // Removal happens after the scan rather than inside it: mutating the store while
+        // walking its own chunks is how you get a concurrent-modification fault in an ECS.
+        int removed = 0;
+        for (Ref<EntityStore> ref : doomed) {
+            try {
+                if (ref.isValid()) {
+                    store.removeEntity(ref, RemoveReason.REMOVE);
+                    removed++;
+                }
+            } catch (Throwable t) {
+                warnOccasionally("Pet sweep removal failed", t);
+            }
+        }
+        return removed;
     }
 
     /** Writes the owner's position into the follow slot, and re-arms the despawn timer. */

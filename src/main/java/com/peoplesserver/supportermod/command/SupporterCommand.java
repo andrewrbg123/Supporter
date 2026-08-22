@@ -81,6 +81,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new QuestsSub(plugin));
         addSubCommand(new PetSub(plugin));
         addSubCommand(new PettestSub(plugin));
+        addSubCommand(new PetsweepSub(plugin));
         addSubCommand(new UitestSub(plugin));
         addSubCommand(new ChargebackSub(plugin));
         addSubCommand(new GrantSub(plugin));
@@ -1234,6 +1235,52 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             }
             ok(ctx, "Pet out: " + name + "! It follows you and stays across relogs.");
             info(ctx, "/supporter pet off sends it home.");
+        }
+    }
+
+    // --- /supporter petsweep ------------------------------------------------------------------
+
+    /**
+     * Clears stray pets from the world you are standing in.
+     *
+     * <p>A command rather than the "kill stick" that was asked for, and the reason is worth
+     * stating: pets carry 1000 health precisely so that nothing can casually kill somebody's
+     * companion, and a weapon that could would need combat wiring on an entity deliberately
+     * built without any. This does the job the stick was wanted for — clearing leftovers —
+     * instantly and with certainty, and it cannot miss one that wandered off.
+     *
+     * <p>Only UNTRACKED pets are removed: a live pet belonging to an online player is never
+     * touched, so this is safe to run with people on.
+     */
+    public static final class PetsweepSub extends AbstractPlayerCommand {
+        private final SupporterPlugin plugin;
+
+        public PetsweepSub(SupporterPlugin plugin) {
+            super("petsweep", "ADMIN: remove stray pets in this world.");
+            setPermissionGroup(GameMode.Creative);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            var pets = plugin.pets();
+            if (pets == null) {
+                err(ctx, "Pet system unavailable.");
+                return;
+            }
+            try {
+                int removed = pets.sweepStrays(world, store);
+                if (removed > 0) {
+                    ok(ctx, "Swept " + removed + " stray pet(s) from " + world.getName() + ".");
+                } else {
+                    info(ctx, "No strays in " + world.getName()
+                            + " - every pet here belongs to someone.");
+                }
+            } catch (Throwable t) {
+                err(ctx, "Sweep failed: " + t.getMessage());
+                plugin.log().error("Pet sweep failed", t);
+            }
         }
     }
 
