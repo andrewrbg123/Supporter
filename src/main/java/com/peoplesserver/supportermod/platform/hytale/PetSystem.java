@@ -178,9 +178,10 @@ public final class PetSystem {
                 pet.holdAt = new Vector3d(tc.getPosition());
             }
         }
-        if (mode == PetMode.SIT) {
-            playSit(pet, store);
-        }
+        // Always set the pose, including the null that clears it: the engine dedupes a
+        // repeat, so a redundant clear costs nothing, and skipping the clear on stand-up
+        // would leave the slot dirty and make the next sit a no-op.
+        setPose(pet, mode == PetMode.SIT ? "Laydown" : null, store);
         return mode;
     }
 
@@ -191,19 +192,36 @@ public final class PetSystem {
     }
 
     /**
-     * Plays the lying-down animation. Every creature this plugin uses as a pet inherits the
-     * vanilla {@code Laydown} set from its model asset, so this is one call rather than a table
-     * of per-species animation names — and a species that somehow lacks it simply does not
-     * animate, which is why the failure is swallowed rather than reported.
+     * Sets or clears the pet's pose animation. Pass {@code "Laydown"} to sit, null to stand.
+     *
+     * <p><b>The EMOTE slot, not Movement.</b> 0.30.0 used Movement and the pose lasted a moment
+     * before the pet stood back up. Movement is the slot the LOCOMOTION system owns, so the
+     * motion controller overwrites anything put there the next time the pet's motion state
+     * changes. Nothing else writes Emote, so the pose survives there.
+     *
+     * <p><b>Why there is no periodic re-assert, and why the clear is mandatory.</b> Reading
+     * {@code NPCEntity.playAnimation} off the server jar settles both. It writes the animation
+     * into {@code ActiveAnimationComponent}, which is a REPLICATED component — so the pose is
+     * server state, not a one-off packet, and a player who walks away and comes back, or logs
+     * in later, sees the pet still lying down without us resending anything. It also returns
+     * early when the slot already holds the name being set. That makes a repeat call free, but
+     * it also means a slot left dirty can never be re-set: without clearing on stand-up, the
+     * SECOND sit of a follow → sit → follow → sit cycle would silently do nothing. Passing null
+     * skips the animation-name validation and sends the stop, keeping component and client in
+     * step.
+     *
+     * <p>A species whose model lacks {@code Laydown} logs the engine's own rate-limited
+     * "Missing animation" warning and simply does not pose, which is why nothing is reported
+     * from here.
      */
-    private void playSit(Pet pet, Store<EntityStore> store) {
+    private void setPose(Pet pet, String animation, Store<EntityStore> store) {
         try {
             NPCEntity npc = store.getComponent(pet.ref, NPCEntity.getComponentType());
             if (npc != null) {
-                npc.playAnimation(pet.ref, AnimationSlot.Movement, "Laydown", store);
+                npc.playAnimation(pet.ref, AnimationSlot.Emote, animation, store);
             }
         } catch (Throwable t) {
-            warnOccasionally("Pet sit animation failed", t);
+            warnOccasionally("Pet pose animation failed", t);
         }
     }
 
