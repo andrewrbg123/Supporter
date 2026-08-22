@@ -1216,6 +1216,9 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             PETS.put("gecko", "SupporterPet_Gecko");
             PETS.put("lamb", "SupporterPet_Lamb");
             PETS.put("goat", "SupporterPet_Goat");
+            // 0.29.1: the first SERVER-EXCLUSIVE pet - vanilla bunny geometry and animations,
+            // our own texture, so it exists on this server and nowhere else.
+            PETS.put("goldbunny", "SupporterPet_GoldBunny");
         }
 
         private final SupporterPlugin plugin;
@@ -1463,10 +1466,8 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                 new java.util.LinkedHashMap<>();
 
         static {
-            // 0.29.0 spike: does the model-asset loader scan plugin packs? This role's
-            // appearance is ours (Server/Models/Supporter/), pointing at vanilla bunny
-            // geometry and animations with our own texture.
-            CANDIDATES.put("goldbunny", "SupporterPet_GoldBunny");
+            // Empty: goldbunny graduated to the catalogue in 0.29.1 by rendering. The next
+            // unproven role goes here.
         }
 
         /** The real catalogue plus the spike candidates. */

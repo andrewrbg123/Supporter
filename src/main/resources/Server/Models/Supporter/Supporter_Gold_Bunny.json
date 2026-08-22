@@ -18,7 +18,7 @@
   "DefaultAttachments": [
     {
       "Model": "NPC/Livestock/Bunny/Models/Attachments/Horns.blockymodel",
-      "Texture": "NPC/Livestock/Bunny/Models/Attachments/Horns_Texture.png"
+      "Texture": "NPC/Supporter/Gold_Bunny_Horns.png"
     }
   ],
   "AnimationSets": {

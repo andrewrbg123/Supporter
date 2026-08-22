@@ -603,6 +603,7 @@ public final class SupporterConfig {
         out.put("gecko", 300);
         out.put("lamb", 350);
         out.put("goat", 350);
+        out.put("goldbunny", 800); // server-exclusive: the only pet that exists nowhere else
         return out;
     }
 
