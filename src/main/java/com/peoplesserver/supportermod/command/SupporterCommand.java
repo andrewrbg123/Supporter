@@ -74,6 +74,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new CapeSub(plugin));
         addSubCommand(new HatSub(plugin));
         addSubCommand(new ShoesSub(plugin));
+        addSubCommand(new WingsSub(plugin));
         addSubCommand(new SkinSub(plugin));
         addSubCommand(new TokensSub(plugin));
         addSubCommand(new ShopSub(plugin));
@@ -555,6 +556,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
             info(ctx, "  A supporter cape — " + CapeSub.DESIGNS.size() + " designs");
             info(ctx, "    /supporter cape");
             info(ctx, "  Headwear — " + String.join(", ", HatSub.HATS.keySet()));
+            info(ctx, "  Wings — the chest slot, cosmetic only, /supporter wings");
             info(ctx, "    /supporter hat");
             info(ctx, "  Supporter trainers");
             info(ctx, "    /supporter shoes — or the panel Wardrobe tab for all of it");
@@ -1025,6 +1027,73 @@ public final class SupporterCommand extends AbstractPlayerCommand {
      * with foot anchors the walk cycle drives, positions copied digit-for-digit from the vanilla
      * Bronze legs model because those numbers are the bone binding.
      */
+    /**
+     * {@code /supporter wings} — the flagship chest cosmetic, and the first self-authored model
+     * to use rotation.
+     *
+     * <p>Its own catalogue rather than another cape design, because it is not one: a cape is
+     * cloth hanging behind you and wings are geometry standing out from your back. They share
+     * the chest slot all the same, so wearing wings means no cape and no chest armour, which
+     * the delivery message says plainly.
+     *
+     * <p>They do not let you fly, and that is worth stating in the item description as well as
+     * here — a wearable that looks like a movement perk on a faction server would be the first
+     * thing anybody assumed was pay-to-win.
+     */
+    public static final class WingsSub extends PublicPlayerCommand {
+
+        /** Wing design → item id. One design until it has been seen in game. */
+        public static final java.util.Map<String, String> WINGS = new java.util.LinkedHashMap<>();
+
+        static {
+            WINGS.put("wings", "Supporter_Wings");
+        }
+
+        private final SupporterPlugin plugin;
+
+        public WingsSub(SupporterPlugin plugin) {
+            super("wings", "Your supporter wings - the chest slot, and they do not fly.");
+            setPermissionGroup(GameMode.Adventure);
+            this.plugin = plugin;
+        }
+
+        @Override
+        protected void execute(CommandContext ctx, Store<EntityStore> store, Ref<EntityStore> ref,
+                               PlayerRef player, World world) {
+            SupporterService service = service(plugin, ctx);
+            if (service == null) {
+                return;
+            }
+            UUID uuid = player.getUuid();
+            if (!service.isSupporter(uuid)) {
+                err(ctx, "Wings are a supporter perk. /supporter info to find out more.");
+                return;
+            }
+            String name = "wings";
+            int cost = plugin.config().gearCost(name);
+            if (!service.ownsGear(uuid, name, cost)) {
+                err(ctx, "Wings are locked — " + cost + " tokens. /supporter buy wings, "
+                        + "or the Shop tab.");
+                return;
+            }
+            try {
+                ItemStackTransaction tx = Player.giveItem(
+                        new ItemStack(WINGS.get(name), 1), ref, store);
+                ItemStack remainder = tx == null ? null : tx.getRemainder();
+                if (remainder != null && !remainder.isEmpty()) {
+                    err(ctx, "No room in your inventory — clear a slot and try again.");
+                    return;
+                }
+                ok(ctx, "Supporter wings delivered. Wear them in your chest slot.");
+                info(ctx, "They give no protection and no flight — and they share the chest "
+                        + "slot, so it is wings or a cape, never both.");
+            } catch (Throwable t) {
+                err(ctx, "Could not deliver the wings: " + t.getMessage());
+                plugin.log().error("Wings delivery failed for " + uuid, t);
+            }
+        }
+    }
+
     public static final class ShoesSub extends PublicPlayerCommand {
 
         /** Shoe name → item id, matching Server/Item/Items/Armor/ in our asset pack. */
@@ -1549,6 +1618,7 @@ public final class SupporterCommand extends AbstractPlayerCommand {
                     String lower = item.toLowerCase();
                     String getHint = CapeSub.DESIGNS.containsKey(lower) ? "/supporter cape "
                             : HatSub.HATS.containsKey(lower) ? "/supporter hat "
+                            : WingsSub.WINGS.containsKey(lower) ? "/supporter "
                             : ShoesSub.SHOES.containsKey(lower) ? "/supporter shoes " : null;
                     if (getHint != null) {
                         result = service.purchaseGear(uuid, lower,

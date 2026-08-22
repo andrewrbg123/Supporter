@@ -388,7 +388,8 @@ public final class FlatPanel {
         String[][] perks = {
             {"Chat identity", "A tag, your own title and your own colour."},
             {"Particle trails", config.trails().size() + " to choose from, two free."},
-            {"Capes", SupporterCommand.CapeSub.DESIGNS.size() + " designs, six of them free."},
+            {"Capes and wings", SupporterCommand.CapeSub.DESIGNS.size()
+                    + " cape designs, six free - plus wings, if you can afford them."},
             {"Headwear and shoes", SupporterCommand.HatSub.HATS.size()
                     + " hats plus trainers, worn from the Wardrobe."},
             {"Pets", SupporterCommand.PetSub.PETS.size()
@@ -779,10 +780,25 @@ public final class FlatPanel {
         // dropped. The first draft of this method routed section heads through a helper that
         // discarded the returned builder, and every Wardrobe heading would have vanished with
         // no error at all. Inline and reassigned, so the trap has nowhere to hide.
+        // Wings sit in the capes section rather than getting their own: they are not capes,
+        // but they compete for the same slot, and a player deciding what goes on their back
+        // wants to see the whole choice in one row.
         tab = (GroupBuilder) tab.addChild(
-                sectionHead("FlatWdHCapes", "CAPES", "one chest item at a time", y));
+                sectionHead("FlatWdHCapes", "BACK", "one chest item at a time", y));
         y += HEAD_H;
         int i = 0;
+        for (java.util.Map.Entry<String, String> e : SupporterCommand.WingsSub.WINGS.entrySet()) {
+            String name = e.getKey();
+            String item = e.getValue();
+            if (!service.ownsGear(uuid, name, plugin.config().gearCost(name))) {
+                continue;
+            }
+            tab = (GroupBuilder) tab.addChild(wardrobeChip("FlatWdWing_" + name, name, i, y,
+                    theme.accentBright(),
+                    (Void v, UIContext ctx) -> giveWearable(service, uuid, playerRef, name,
+                            "Wings", item, world, ctx)));
+            i++;
+        }
         for (java.util.Map.Entry<String, String> e
                 : SupporterCommand.CapeSub.DESIGNS.entrySet()) {
             String name = e.getKey();
@@ -1361,6 +1377,7 @@ public final class FlatPanel {
         List<String> out = new ArrayList<>();
         out.addAll(SupporterCommand.CapeSub.DESIGNS.keySet());
         out.addAll(SupporterCommand.HatSub.HATS.keySet());
+        out.addAll(SupporterCommand.WingsSub.WINGS.keySet());
         out.addAll(SupporterCommand.ShoesSub.SHOES.keySet());
         return out;
     }

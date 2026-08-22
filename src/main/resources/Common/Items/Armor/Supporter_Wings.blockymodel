@@ -1,0 +1,197 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Chest",
+      "position": {"x": 0, "y": 22, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {
+        "type": "none",
+        "offset": {"x": 0, "y": 11, "z": 0},
+        "stretch": {"x": 0, "y": 0, "z": 0},
+        "settings": {
+          "isPiece": true
+        },
+        "textureLayout": {},
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "flat"
+      },
+      "children": [
+        {
+          "id": "2",
+          "name": "WingL_Inner",
+          "position": {"x": -3, "y": 4, "z": -5},
+          "orientation": {"x": 0, "y": -0.2164, "z": 0, "w": 0.9763},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 14, "y": 16, "z": 2}
+            },
+            "textureLayout": {
+              "front":  {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "back":   {"offset": {"x": 1, "y": 1},  "mirror": {"x": false, "y": false}, "angle": 0},
+              "left":   {"offset": {"x": 16, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "right":  {"offset": {"x": 16, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "top":    {"offset": {"x": 20, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "bottom": {"offset": {"x": 20, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0}
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "flat"
+          },
+          "children": [
+            {
+              "id": "3",
+              "name": "WingL_Mid",
+              "position": {"x": -12, "y": 3, "z": 0},
+              "orientation": {"x": 0, "y": -0.1305, "z": 0, "w": 0.9914},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 11, "y": 13, "z": 2}
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 1, "y": 19},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 1, "y": 19},  "mirror": {"x": false, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 13, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 13, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 17, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 17, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": [
+                {
+                  "id": "4",
+                  "name": "WingL_Tip",
+                  "position": {"x": -9, "y": 3, "z": 0},
+                  "orientation": {"x": 0, "y": -0.1305, "z": 0, "w": 0.9914},
+                  "shape": {
+                    "type": "box",
+                    "offset": {"x": 0, "y": 0, "z": 0},
+                    "stretch": {"x": 1, "y": 1, "z": 1},
+                    "settings": {
+                      "isPiece": false,
+                      "size": {"x": 8, "y": 9, "z": 2}
+                    },
+                    "textureLayout": {
+                      "front":  {"offset": {"x": 1, "y": 34},  "mirror": {"x": false, "y": false}, "angle": 0},
+                      "back":   {"offset": {"x": 1, "y": 34},  "mirror": {"x": false, "y": false}, "angle": 0},
+                      "left":   {"offset": {"x": 10, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0},
+                      "right":  {"offset": {"x": 10, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0},
+                      "top":    {"offset": {"x": 14, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0},
+                      "bottom": {"offset": {"x": 14, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0}
+                    },
+                    "unwrapMode": "custom",
+                    "visible": true,
+                    "doubleSided": false,
+                    "shadingMode": "flat"
+                  },
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "name": "WingR_Inner",
+          "position": {"x": 3, "y": 4, "z": -5},
+          "orientation": {"x": 0, "y": 0.2164, "z": 0, "w": 0.9763},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 14, "y": 16, "z": 2}
+            },
+            "textureLayout": {
+              "front":  {"offset": {"x": 1, "y": 1},  "mirror": {"x": true, "y": false}, "angle": 0},
+              "back":   {"offset": {"x": 1, "y": 1},  "mirror": {"x": true, "y": false}, "angle": 0},
+              "left":   {"offset": {"x": 16, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "right":  {"offset": {"x": 16, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "top":    {"offset": {"x": 20, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0},
+              "bottom": {"offset": {"x": 20, "y": 1}, "mirror": {"x": false, "y": false}, "angle": 0}
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "flat"
+          },
+          "children": [
+            {
+              "id": "6",
+              "name": "WingR_Mid",
+              "position": {"x": 12, "y": 3, "z": 0},
+              "orientation": {"x": 0, "y": 0.1305, "z": 0, "w": 0.9914},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {
+                  "isPiece": false,
+                  "size": {"x": 11, "y": 13, "z": 2}
+                },
+                "textureLayout": {
+                  "front":  {"offset": {"x": 1, "y": 19},  "mirror": {"x": true, "y": false}, "angle": 0},
+                  "back":   {"offset": {"x": 1, "y": 19},  "mirror": {"x": true, "y": false}, "angle": 0},
+                  "left":   {"offset": {"x": 13, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "right":  {"offset": {"x": 13, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "top":    {"offset": {"x": 17, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0},
+                  "bottom": {"offset": {"x": 17, "y": 19}, "mirror": {"x": false, "y": false}, "angle": 0}
+                },
+                "unwrapMode": "custom",
+                "visible": true,
+                "doubleSided": false,
+                "shadingMode": "flat"
+              },
+              "children": [
+                {
+                  "id": "7",
+                  "name": "WingR_Tip",
+                  "position": {"x": 9, "y": 3, "z": 0},
+                  "orientation": {"x": 0, "y": 0.1305, "z": 0, "w": 0.9914},
+                  "shape": {
+                    "type": "box",
+                    "offset": {"x": 0, "y": 0, "z": 0},
+                    "stretch": {"x": 1, "y": 1, "z": 1},
+                    "settings": {
+                      "isPiece": false,
+                      "size": {"x": 8, "y": 9, "z": 2}
+                    },
+                    "textureLayout": {
+                      "front":  {"offset": {"x": 1, "y": 34},  "mirror": {"x": true, "y": false}, "angle": 0},
+                      "back":   {"offset": {"x": 1, "y": 34},  "mirror": {"x": true, "y": false}, "angle": 0},
+                      "left":   {"offset": {"x": 10, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0},
+                      "right":  {"offset": {"x": 10, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0},
+                      "top":    {"offset": {"x": 14, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0},
+                      "bottom": {"offset": {"x": 14, "y": 34}, "mirror": {"x": false, "y": false}, "angle": 0}
+                    },
+                    "unwrapMode": "custom",
+                    "visible": true,
+                    "doubleSided": false,
+                    "shadingMode": "flat"
+                  },
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

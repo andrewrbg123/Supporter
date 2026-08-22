@@ -566,6 +566,7 @@ public final class SupporterConfig {
         out.put("top-hat", 150); // was "top" until 0.21.4; a stale "top" key in a live config
                                  // prices nothing and is harmless
         out.put("wizard", 200);
+        out.put("wings", 600);  // the flagship: two months of tenure, or a fortnight of quests
         return out;
     }
 
