@@ -22,7 +22,7 @@ import javax.imageio.ImageIO;
  * Rotation is still available and still worth using — but it needs its handedness established
  * by a probe that can tell the two directions apart, not assumed from the sign.
  *
- * <p><b>Also rebuilt from the first live look</b>, which read as ears: too small, and anchored
+ * <p><b>Tuned three times against live looks.</b> First they read as ears: too small, anchored
  * at head height. The anchor dropped to y-8 (y-12 in 0.27.1 was then too LOW, sitting at the
  * waist), segments grew, and the texture gained real contrast — at sixteen pixels across, a
  * smooth gradient and one-pixel feather hints just look like dirt, so primaries alternate as
@@ -33,10 +33,10 @@ import javax.imageio.ImageIO;
  * asymmetry to rule out while the geometry was in question:
  *
  * <pre>
- * S1 f/b 16x18 at (1,1)    l/r 3x18 at (18,1)   t/b 16x3 at (22,1)
- * S2 f/b 13x15 at (1,21)   l/r 3x15 at (15,21)  t/b 13x3 at (19,21)
- * S3 f/b 10x12 at (1,38)   l/r 3x12 at (12,38)  t/b 10x3 at (16,38)
- * S4 f/b  7x9  at (1,52)   l/r 3x9  at (9,52)   t/b  7x3 at (13,52)
+ * S1 f/b 14x20 at (1,1)    l/r 3x20 at (16,1)   t/b 14x3 at (20,1)
+ * S2 f/b 12x17 at (1,23)   l/r 3x17 at (14,23)  t/b 12x3 at (18,23)
+ * S3 f/b  9x13 at (1,42)   l/r 3x13 at (11,42)  t/b  9x3 at (15,42)
+ * S4 f/b  6x10 at (1,57)   l/r 3x10 at (8,57)   t/b  6x3 at (12,57)
  * </pre>
  */
 public final class WingsGen {
@@ -63,24 +63,24 @@ public final class WingsGen {
         BufferedImage img = new BufferedImage(TEX, TEX, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
 
-        segment(g, 1, 1, 16, 18, 4);
-        edgeStrip(g, 18, 1, 3, 18);
-        edgeStrip(g, 22, 1, 16, 3);
+        segment(g, 1, 1, 14, 20, 4);
+        edgeStrip(g, 16, 1, 3, 20);
+        edgeStrip(g, 20, 1, 14, 3);
 
-        segment(g, 1, 21, 13, 15, 3);
-        edgeStrip(g, 15, 21, 3, 15);
-        edgeStrip(g, 19, 21, 13, 3);
+        segment(g, 1, 23, 12, 17, 3);
+        edgeStrip(g, 14, 23, 3, 17);
+        edgeStrip(g, 18, 23, 12, 3);
 
-        segment(g, 1, 38, 10, 12, 3);
-        edgeStrip(g, 12, 38, 3, 12);
-        edgeStrip(g, 16, 38, 10, 3);
+        segment(g, 1, 42, 9, 13, 3);
+        edgeStrip(g, 11, 42, 3, 13);
+        edgeStrip(g, 15, 42, 9, 3);
 
-        segment(g, 1, 52, 7, 9, 2);
-        edgeStrip(g, 9, 52, 3, 9);
-        edgeStrip(g, 13, 52, 7, 3);
+        segment(g, 1, 57, 6, 10, 2);
+        edgeStrip(g, 8, 57, 3, 10);
+        edgeStrip(g, 12, 57, 6, 3);
         // The outermost tip is gold: it is the part that catches the eye in silhouette.
         g.setColor(GOLD);
-        g.fillRect(1, 52, 7, 3);
+        g.fillRect(1, 57, 6, 3);
 
         g.dispose();
         return img;
