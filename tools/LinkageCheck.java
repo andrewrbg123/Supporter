@@ -17,29 +17,38 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Finds what a compiled plugin jar would fail to link against a new server jar.
+ * Finds what a compiled plugin jar would fail to link against a server jar.
  *
  * <p>Recompiling only catches breakage in code you have the source for. Third-party plugins
- * arrive as jars built against an older server, and the failure mode is a {@code
- * NoSuchMethodError} at the exact moment a player opens a menu — which is why this reads the
- * constant pool directly and resolves every reference ahead of time instead.
+ * arrive as jars built against some other server version, and the failure mode is either a
+ * refusal to boot or a {@code NoSuchMethodError} at the exact moment a player uses the feature.
+ * This reads the constant pool directly and resolves every reference ahead of time instead.
  *
- * <p>It is a DIFFERENTIAL check, and that is the part that makes the output usable. Reporting
- * everything that fails to resolve against the new server buries the answer in references to
- * optional plugins that were never on the classpath to begin with. So each reference is
- * resolved against BOTH servers and only the ones that resolved against the old and do not
- * resolve against the new are reported: those, and only those, are things the update broke.
+ * <p>The question asked is ABSOLUTE: does this reference resolve against the server you are
+ * about to run? An earlier version asked a differential question — what resolved against the
+ * old server and no longer does — which is correct only for jars built against that old server.
+ * A plugin built against a NEWER server than the old one can reference something that exists in
+ * neither, and the differential form silently passes it. Each finding is still LABELLED using
+ * the old server, because "the update removed this" and "this was never here" point at
+ * different fixes.
  *
- * <p>Members are resolved through the superclass and interface chain, as the JVM does. A chain
- * that leaves the indexed jars — into the JDK, or a shaded library — is treated as resolvable
- * rather than reported, because the alternative is a page of false positives.
+ * <p>Members resolve through the superclass and interface chain, as the JVM does, over three
+ * answers rather than two. A chain that leaves the indexed jars into the JDK or a shaded
+ * library gives UNKNOWN, which is never reported — without it, every hytale class extending a
+ * JDK class would produce false positives. A chain that leaves into a MISSING hytale class
+ * gives NOT_FOUND, because that class really is gone.
  *
- * <p>Usage: {@code java tools/LinkageCheck.java <plugin.jar> <old-server.jar> <new-server.jar>}
+ * <p>Usage: {@code java tools/LinkageCheck.java <old-server.jar> <target-server.jar> <plugin.jar>...}
  */
 public final class LinkageCheck {
 
     /** Only references into this package are checked; everything else is someone else's problem. */
     private static final String WATCHED = "com/hypixel/hytale/";
+
+    private static final int NOT_FOUND = 0;
+    private static final int FOUND = 1;
+    /** The chain left the indexed jars, so this tool has no opinion. Never reported. */
+    private static final int UNKNOWN = 2;
 
     /** One class as the index knows it: what it declares, and who it inherits from. */
     private record Indexed(String superName, List<String> interfaces, Set<String> members) {}
@@ -47,24 +56,24 @@ public final class LinkageCheck {
     public static void main(String[] args) throws IOException {
         if (args.length < 3) {
             System.err.println(
-                    "usage: LinkageCheck <old-server.jar> <new-server.jar> <plugin.jar>...");
+                    "usage: LinkageCheck <old-server.jar> <target-server.jar> <plugin.jar>...");
             System.exit(2);
         }
-        // The two server jars carry ~36,000 classes each, so they are indexed ONCE and every
-        // plugin is checked against the same pair. Re-running the whole tool per plugin costs
-        // a minute of indexing each time and makes checking a whole server impractical.
+        // The server jars carry ~36,000 classes each, so they are indexed ONCE and every plugin
+        // is checked against the same pair. Re-running the tool per plugin costs a minute of
+        // indexing each time and makes checking a whole server impractical.
         Map<String, Indexed> oldIndex = new HashMap<>();
-        Map<String, Indexed> newIndex = new HashMap<>();
+        Map<String, Indexed> targetIndex = new HashMap<>();
         index(args[0], oldIndex);
-        index(args[1], newIndex);
-        System.out.println("old server: " + args[0] + " (" + oldIndex.size() + " classes)");
-        System.out.println("new server: " + args[1] + " (" + newIndex.size() + " classes)");
+        index(args[1], targetIndex);
+        System.out.println("old server:    " + args[0] + " (" + oldIndex.size() + " classes)");
+        System.out.println("TARGET server: " + args[1] + " (" + targetIndex.size() + " classes)");
         System.out.println();
 
         List<String> broken = new ArrayList<>();
         List<String> clean = new ArrayList<>();
         for (int i = 2; i < args.length; i++) {
-            if (check(args[i], oldIndex, newIndex)) {
+            if (check(args[i], oldIndex, targetIndex)) {
                 clean.add(args[i]);
             } else {
                 broken.add(args[i]);
@@ -73,7 +82,7 @@ public final class LinkageCheck {
 
         System.out.println("=".repeat(78));
         System.out.println("SUMMARY: " + broken.size() + " of " + (args.length - 2)
-                + " jar(s) reference server API the update removed or changed.");
+                + " jar(s) reference server API missing from " + args[1]);
         for (String b : broken) {
             System.out.println("  BREAKS   " + b);
         }
@@ -82,16 +91,16 @@ public final class LinkageCheck {
         }
     }
 
-    /** Checks one plugin jar. Returns true when nothing regressed. */
+    /** Checks one plugin jar. Returns true when every reference resolves. */
     private static boolean check(
-            String path, Map<String, Indexed> oldIndex, Map<String, Indexed> newIndex)
+            String path, Map<String, Indexed> oldIndex, Map<String, Indexed> targetIndex)
             throws IOException {
         Set<String> missingClasses = new TreeSet<>();
         Set<String> missingMembers = new TreeSet<>();
         int scanned = 0;
-        // Counted and printed so a clean result can be trusted. "No regressions" is worth
-        // nothing on its own — it reads identically whether the jar is fine or the scan found
-        // nothing to look at, which is a mistake this tool has already made once.
+        // Counted and printed so a clean result can be trusted. "No problems" is worth nothing
+        // on its own — it reads identically whether the jar is fine or the scan found nothing
+        // to look at, which is a mistake this tool has already made once.
         int watchedRefs = 0;
 
         try (JarFile jar = new JarFile(path)) {
@@ -124,18 +133,19 @@ public final class LinkageCheck {
                         String member = ref.nameAndType().name().stringValue()
                                 + ref.nameAndType().type().stringValue();
                         watchedRefs++;
-                        if (hasMember(oldIndex, owner, member)
-                                && !hasMember(newIndex, owner, member)) {
-                            missingMembers.add(owner + "#" + member + "\n        used by " + from);
+                        if (resolve(targetIndex, owner, member) == NOT_FOUND) {
+                            missingMembers.add(owner + "#" + member
+                                    + "\n        " + label(resolve(oldIndex, owner, member))
+                                    + ", used by " + from);
                         }
                     } else if (pe instanceof ClassEntry ce) {
                         String owner = ce.asInternalName();
-                        if (!owner.startsWith(WATCHED)) {
+                        if (!owner.startsWith(WATCHED) || targetIndex.containsKey(owner)) {
                             continue;
                         }
-                        if (oldIndex.containsKey(owner) && !newIndex.containsKey(owner)) {
-                            missingClasses.add(owner + "\n        used by " + from);
-                        }
+                        missingClasses.add(owner + "\n        "
+                                + label(oldIndex.containsKey(owner) ? FOUND : NOT_FOUND)
+                                + ", used by " + from);
                     }
                 }
             }
@@ -144,16 +154,23 @@ public final class LinkageCheck {
         boolean ok = missingClasses.isEmpty() && missingMembers.isEmpty();
         System.out.println((ok ? "ok    " : "BREAKS") + "  " + path
                 + "  (" + scanned + " classes, " + watchedRefs + " server refs)");
-        report("CLASSES REMOVED", missingClasses);
-        report("MEMBERS REMOVED OR CHANGED", missingMembers);
+        report("CLASSES MISSING", missingClasses);
+        report("MEMBERS MISSING", missingMembers);
         return ok;
+    }
+
+    /** Says which fix a finding points at: something the update took away, or something else. */
+    private static String label(int oldState) {
+        return oldState == FOUND
+                ? "removed by the update"
+                : "absent from the old server too — jar likely built against a different version";
     }
 
     private static void report(String title, Set<String> found) {
         if (found.isEmpty()) {
             return;
         }
-        System.out.println(title + " (" + found.size() + ")");
+        System.out.println("  " + title + " (" + found.size() + ")");
         for (String line : found) {
             System.out.println("    " + line);
         }
@@ -187,45 +204,108 @@ public final class LinkageCheck {
         }
     }
 
-    /**
-     * Resolves a member the way the JVM does — the class, then its superclasses, then its
-     * interfaces. Returns true when the chain leaves the index, since an unknown answer must
-     * not be reported as a break.
-     */
-    private static boolean hasMember(Map<String, Indexed> index, String owner, String member) {
-        return hasMember(index, owner, member, new HashSet<>());
+    private static int resolve(Map<String, Indexed> index, String owner, String member) {
+        return resolve(index, owner, member, new HashSet<>());
     }
 
-    private static boolean hasMember(
+    /** Indexes a class this JVM can load, so JDK supertypes are known rather than guessed at. */
+    private static Indexed reflect(String internalName) {
+        try {
+            Class<?> c = Class.forName(internalName.replace('/', '.'), false,
+                    LinkageCheck.class.getClassLoader());
+            Set<String> members = new HashSet<>();
+            for (var m : c.getDeclaredMethods()) {
+                members.add(m.getName() + descriptor(m.getParameterTypes(), m.getReturnType()));
+            }
+            for (var ctor : c.getDeclaredConstructors()) {
+                members.add("<init>" + descriptor(ctor.getParameterTypes(), void.class));
+            }
+            for (var f : c.getDeclaredFields()) {
+                members.add(f.getName() + descriptor(f.getType()));
+            }
+            List<String> interfaces = new ArrayList<>();
+            for (Class<?> i : c.getInterfaces()) {
+                interfaces.add(i.getName().replace('.', '/'));
+            }
+            String superName = c.getSuperclass() == null
+                    ? null
+                    : c.getSuperclass().getName().replace('.', '/');
+            return new Indexed(superName, interfaces, members);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String descriptor(Class<?>[] params, Class<?> returnType) {
+        StringBuilder sb = new StringBuilder("(");
+        for (Class<?> p : params) {
+            sb.append(descriptor(p));
+        }
+        return sb.append(')').append(descriptor(returnType)).toString();
+    }
+
+    private static String descriptor(Class<?> t) {
+        if (t.isArray()) {
+            return "[" + descriptor(t.getComponentType());
+        }
+        if (!t.isPrimitive()) {
+            return "L" + t.getName().replace('.', '/') + ";";
+        }
+        return switch (t.getName()) {
+            case "void" -> "V";
+            case "boolean" -> "Z";
+            case "byte" -> "B";
+            case "char" -> "C";
+            case "short" -> "S";
+            case "int" -> "I";
+            case "long" -> "J";
+            case "float" -> "F";
+            default -> "D";
+        };
+    }
+
+    /**
+     * Resolves a member the way the JVM does — the class, then its superclasses, then its
+     * interfaces — over three answers. See the class comment for why UNKNOWN has to exist.
+     */
+    private static int resolve(
             Map<String, Indexed> index, String owner, String member, Set<String> seen) {
         if (owner == null || !seen.add(owner)) {
-            return false;
+            return NOT_FOUND;
         }
         Indexed cls = index.get(owner);
         if (cls == null) {
-            // Outside the indexed jars: the JDK, a shaded library, an array type. Answering
-            // "resolvable" here looks safe and is in fact the bug that made the first version
-            // of this tool useless — nearly every class ends its super chain at
-            // java/lang/Object, so every lookup fell through to that answer and NOTHING was
-            // ever reported, including breakage known to be present.
-            //
-            // Answering "not found" is safe because the check is DIFFERENTIAL. The same
-            // conservatism runs against both servers, so a member that is invisible for this
-            // reason is invisible on both sides and is never reported. What survives is only
-            // the asymmetric case: resolvable against the old server, not against the new.
-            return false;
+            // A missing class INSIDE the watched package is genuinely missing, and is reported
+            // in its own right.
+            if (owner.startsWith(WATCHED)) {
+                return NOT_FOUND;
+            }
+            // Outside it, the chain has reached the JDK or a library. Neither blanket answer
+            // works here, and both were tried: "not found" flags every inherited toString() and
+            // every enum ordinal(), while "unknown" suppresses real breakage, because almost
+            // every chain ends at java/lang/Object and one UNKNOWN parent taints the result.
+            // So the class is loaded and indexed for real. Only when it cannot be loaded — a
+            // library absent from this tool's own classpath — is the answer UNKNOWN.
+            cls = reflect(owner);
+            if (cls == null) {
+                return UNKNOWN;
+            }
+            index.put(owner, cls);
         }
         if (cls.members().contains(member)) {
-            return true;
+            return FOUND;
         }
-        if (hasMember(index, cls.superName(), member, seen)) {
-            return true;
-        }
-        for (String iface : cls.interfaces()) {
-            if (hasMember(index, iface, member, seen)) {
-                return true;
+        boolean unknown = false;
+        List<String> parents = new ArrayList<>();
+        parents.add(cls.superName());
+        parents.addAll(cls.interfaces());
+        for (String parent : parents) {
+            int state = resolve(index, parent, member, seen);
+            if (state == FOUND) {
+                return FOUND;
             }
+            unknown |= state == UNKNOWN;
         }
-        return false;
+        return unknown ? UNKNOWN : NOT_FOUND;
     }
 }
