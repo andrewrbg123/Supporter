@@ -16,6 +16,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
+import com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport;
 import com.peoplesserver.supportermod.core.SupporterIdentity;
 import com.peoplesserver.supportermod.core.SupporterService;
 import com.peoplesserver.supportermod.platform.Messenger;
@@ -526,14 +527,22 @@ public final class PetSystem {
         return removed;
     }
 
-    /** Writes the owner's position into the follow slot, and re-arms the despawn timer. */
+    /**
+     * Writes the owner's position into the follow slot, and re-arms the despawn timer.
+     *
+     * <p>Server 0.6 moved the marked-entity state off {@code Role} and made it a component in
+     * its own right, reached by its own static getter. That is the better shape — it is
+     * per-entity state that used to hang off the role object — and it drops a hop, since the
+     * NPC and its role no longer have to be resolved just to reach it. {@code get} is a plain
+     * component lookup guarded only by an assertion, which is disabled in production, so the
+     * null check below is ours to keep.
+     */
     private void stamp(Store<EntityStore> store, Ref<EntityStore> ref, Vector3d ownerPos) {
-        NPCEntity npc = store.getComponent(ref, NPCEntity.getComponentType());
-        if (npc == null || npc.getRole() == null) {
+        MarkedEntitySupport marks = MarkedEntitySupport.get(ref, store);
+        if (marks == null) {
             return;
         }
-        npc.getRole().getMarkedEntitySupport().getStoredPosition(0)
-                .set(ownerPos.x, ownerPos.y, ownerPos.z);
+        marks.getStoredPosition(0).set(ownerPos.x, ownerPos.y, ownerPos.z);
         java.time.Instant deadline =
                 java.time.Instant.now().plusSeconds(DESPAWN_TTL_SECONDS);
         DespawnComponent despawn =

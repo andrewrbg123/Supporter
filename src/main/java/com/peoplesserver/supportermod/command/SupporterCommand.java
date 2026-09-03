@@ -58,6 +58,12 @@ public final class SupporterCommand extends AbstractPlayerCommand {
 
     public SupporterCommand(SupporterPlugin plugin) {
         super("supporter", "Supporter rank: your status, and admin grant/revoke.");
+        // The root is public. It is the entry point every player has to be able to see — the
+        // admin subcommands underneath keep their own permissions and are filtered
+        // individually. Server 0.6 replaced the overridable canGeneratePermission() with this
+        // call; it sets the same flag the registration gate reads, so the behaviour is
+        // unchanged. It must precede registration, which a constructor guarantees.
+        requireNoPermission();
         setPermissionGroup(GameMode.Adventure);
         // Real players type the short form. Observed during non-OP testing: the first thing
         // tried was "/sup", which returned "Command not found".
@@ -88,15 +94,6 @@ public final class SupporterCommand extends AbstractPlayerCommand {
         addSubCommand(new GrantSub(plugin));
         addSubCommand(new RevokeSub(plugin));
         addSubCommand(new ReconcileSub(plugin));
-    }
-
-    /**
-     * The root is public. It is the entry point every player has to be able to see — the admin
-     * subcommands underneath keep their own permissions and are filtered individually.
-     */
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
     }
 
     /**
@@ -171,15 +168,12 @@ public final class SupporterCommand extends AbstractPlayerCommand {
     private abstract static class PublicPlayerCommand extends AbstractPlayerCommand {
         PublicPlayerCommand(String name, String description) {
             super(name, description);
+            requireNoPermission();
         }
 
         PublicPlayerCommand(String description) {
             super(description);
-        }
-
-        @Override
-        protected boolean canGeneratePermission() {
-            return false;
+            requireNoPermission();
         }
     }
 
