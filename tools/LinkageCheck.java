@@ -103,9 +103,27 @@ public final class LinkageCheck {
         // to look at, which is a mistake this tool has already made once.
         int watchedRefs = 0;
 
+        // The plugin's OWN classes are indexed alongside the server's, and references are then
+        // checked whatever their owner. Restricting the check to owners inside the watched
+        // package misses a whole category, and it missed a live one: HyGuns failed to boot on
+        // a NoSuchFieldError for `cancelOnItemChange` on ITS OWN class, a field inherited from
+        // a server base class that 0.6.3 dropped. The owner in the constant pool is the plugin
+        // class, so a watched-owner-only scan called that jar's six findings non-fatal and
+        // never saw the one that stopped the server. Owners that are in neither index resolve
+        // to UNKNOWN and stay unreported, so references into other plugins cost nothing.
+        Map<String, Indexed> pluginClasses = new HashMap<>();
+        List<String[]> memberRefs = new ArrayList<>();
+        List<String[]> classRefs = new ArrayList<>();
+
         try (JarFile jar = new JarFile(path)) {
             for (JarEntry entry : Collections.list(jar.entries())) {
-                if (!entry.getName().endsWith(".class")) {
+                // META-INF/versions/N/ holds a multi-release jar's per-JDK overlays: the SAME
+                // class name compiled against a different JDK. Indexing one variant and then
+                // checking the other's references makes them contradict each other, which is
+                // not a server incompatibility at all — a shaded snakeyaml inside Shop produced
+                // four such findings before this skip, every one of them false.
+                if (!entry.getName().endsWith(".class")
+                        || entry.getName().startsWith("META-INF/")) {
                     continue;
                 }
                 ClassModel cm;
@@ -116,6 +134,7 @@ public final class LinkageCheck {
                 }
                 scanned++;
                 String from = cm.thisClass().asInternalName();
+                pluginClasses.put(from, indexOf(cm));
                 ConstantPool cp = cm.constantPool();
                 for (int i = 1; i < cp.size(); i++) {
                     PoolEntry pe;
@@ -126,29 +145,45 @@ public final class LinkageCheck {
                         continue;
                     }
                     if (pe instanceof MemberRefEntry ref) {
-                        String owner = ref.owner().asInternalName();
-                        if (!owner.startsWith(WATCHED)) {
-                            continue;
-                        }
-                        String member = ref.nameAndType().name().stringValue()
-                                + ref.nameAndType().type().stringValue();
-                        watchedRefs++;
-                        if (resolve(targetIndex, owner, member) == NOT_FOUND) {
-                            missingMembers.add(owner + "#" + member
-                                    + "\n        " + label(resolve(oldIndex, owner, member))
-                                    + ", used by " + from);
-                        }
+                        memberRefs.add(new String[] {
+                                ref.owner().asInternalName(),
+                                ref.nameAndType().name().stringValue(),
+                                ref.nameAndType().type().stringValue(),
+                                from});
                     } else if (pe instanceof ClassEntry ce) {
-                        String owner = ce.asInternalName();
-                        if (!owner.startsWith(WATCHED) || targetIndex.containsKey(owner)) {
-                            continue;
-                        }
-                        missingClasses.add(owner + "\n        "
-                                + label(oldIndex.containsKey(owner) ? FOUND : NOT_FOUND)
-                                + ", used by " + from);
+                        classRefs.add(new String[] {ce.asInternalName(), from});
                     }
                 }
             }
+        }
+
+        Map<String, Indexed> target = new HashMap<>(targetIndex);
+        target.putAll(pluginClasses);
+        Map<String, Indexed> old = new HashMap<>(oldIndex);
+        old.putAll(pluginClasses);
+
+        for (String[] r : memberRefs) {
+            String owner = r[0];
+            String member = r[1] + r[2];
+            if (!target.containsKey(owner)) {
+                continue;
+            }
+            watchedRefs++;
+            if (resolve(target, owner, member) == NOT_FOUND) {
+                missingMembers.add(owner + "#" + member
+                        + "\n        " + label(resolve(old, owner, member))
+                        + ", used by " + r[3]
+                        + "\n        " + suggest(target, owner, r[1]));
+            }
+        }
+        for (String[] r : classRefs) {
+            String owner = r[0];
+            if (!owner.startsWith(WATCHED) || target.containsKey(owner)) {
+                continue;
+            }
+            missingClasses.add(owner + "\n        "
+                    + label(old.containsKey(owner) ? FOUND : NOT_FOUND)
+                    + ", used by " + r[1]);
         }
 
         boolean ok = missingClasses.isEmpty() && missingMembers.isEmpty();
@@ -157,6 +192,48 @@ public final class LinkageCheck {
         report("CLASSES MISSING", missingClasses);
         report("MEMBERS MISSING", missingMembers);
         return ok;
+    }
+
+    /**
+     * Lists what the target server still offers under the same member name.
+     *
+     * <p>This is the difference between a finding you can patch and one you cannot. A signature
+     * that merely widened — {@code Vector3d} to the read-only {@code Vector3dc}, say — leaves a
+     * same-name replacement whose descriptor is the only thing that changed, and rewriting the
+     * descriptor in the constant pool is enough, because the object being passed already
+     * implements the wider type. A member with NO same-name survivor was genuinely deleted, and
+     * no amount of rewriting invents it: that one needs source changes or a new build from the
+     * author.
+     */
+    private static String suggest(Map<String, Indexed> index, String owner, String name) {
+        Set<String> candidates = new TreeSet<>();
+        collectByName(index, owner, name, candidates, new HashSet<>());
+        if (candidates.isEmpty()) {
+            return "NO same-name replacement — deleted outright, cannot be patched";
+        }
+        return "same-name candidate(s), likely a signature change: " + candidates;
+    }
+
+    private static void collectByName(Map<String, Indexed> index, String owner, String name,
+            Set<String> out, Set<String> seen) {
+        if (owner == null || !seen.add(owner)) {
+            return;
+        }
+        Indexed cls = index.get(owner);
+        if (cls == null) {
+            return;
+        }
+        for (String m : cls.members()) {
+            int cut = m.indexOf('(');
+            String memberName = cut < 0 ? m.substring(0, Math.max(0, m.length() - 1)) : m.substring(0, cut);
+            if (cut >= 0 && memberName.equals(name)) {
+                out.add(m.substring(cut));
+            }
+        }
+        collectByName(index, cls.superName(), name, out, seen);
+        for (String iface : cls.interfaces()) {
+            collectByName(index, iface, name, out, seen);
+        }
     }
 
     /** Says which fix a finding points at: something the update took away, or something else. */
@@ -186,22 +263,25 @@ public final class LinkageCheck {
                 }
                 try {
                     ClassModel cm = ClassFile.of().parse(jar.getInputStream(entry).readAllBytes());
-                    Set<String> members = new HashSet<>();
-                    cm.methods().forEach(m -> members.add(
-                            m.methodName().stringValue() + m.methodType().stringValue()));
-                    cm.fields().forEach(f -> members.add(
-                            f.fieldName().stringValue() + f.fieldType().stringValue()));
-                    List<String> interfaces = new ArrayList<>();
-                    cm.interfaces().forEach(ce -> interfaces.add(ce.asInternalName()));
-                    String superName =
-                            cm.superclass().map(ClassEntry::asInternalName).orElse(null);
-                    into.put(cm.thisClass().asInternalName(),
-                            new Indexed(superName, interfaces, members));
+                    into.put(cm.thisClass().asInternalName(), indexOf(cm));
                 } catch (Throwable t) {
                     // A class the parser cannot read is one this check has no opinion about.
                 }
             }
         }
+    }
+
+    /** What one parsed class declares and inherits from. */
+    private static Indexed indexOf(ClassModel cm) {
+        Set<String> members = new HashSet<>();
+        cm.methods().forEach(m -> members.add(
+                m.methodName().stringValue() + m.methodType().stringValue()));
+        cm.fields().forEach(f -> members.add(
+                f.fieldName().stringValue() + f.fieldType().stringValue()));
+        List<String> interfaces = new ArrayList<>();
+        cm.interfaces().forEach(ce -> interfaces.add(ce.asInternalName()));
+        return new Indexed(cm.superclass().map(ClassEntry::asInternalName).orElse(null),
+                interfaces, members);
     }
 
     private static int resolve(Map<String, Indexed> index, String owner, String member) {
